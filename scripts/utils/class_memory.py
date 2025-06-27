@@ -23,7 +23,34 @@ class Memory:
     self.depth          = int(sram_data['depth'])
     self.num_banks      = int(sram_data['banks'])
     self.cache_type     = str(sram_data['type']) if 'type' in sram_data else 'cache'
-    self.rw_ports       = 1
+    
+    # Port configuration - default to 1RW if not specified
+    self.port_config    = str(sram_data.get('ports', '1rw'))
+    
+    # Handle different port configurations
+    if self.port_config == '1rw1r':
+        self.rw_ports = 1
+        self.r_ports = 1
+        self.total_ports = 2
+        self.port_order = '1rw1r'  # Port 0 is RW, Port 1 is R
+    elif self.port_config == '1r1rw':
+        self.rw_ports = 1
+        self.r_ports = 1
+        self.total_ports = 2
+        self.port_order = '1r1rw'  # Port 0 is R, Port 1 is RW
+    else:
+        self.rw_ports = 1
+        self.r_ports = 0
+        self.total_ports = 1
+        self.port_order = '1rw'
+    
+    # Write granularity (default to bit-level if not specified)
+    self.write_granularity = int(sram_data.get('write_granularity', 1))
+    
+    # Write mode (default to write-first if not specified)
+    # Options: 'write_first' (write-through), 'read_first' (no-change), 'write_through' (combinational)
+    self.write_mode = str(sram_data.get('write_mode', 'write_first'))
+    
     self.width_in_bytes = math.ceil(self.width_in_bits / 8.0)
     self.total_size     = self.width_in_bytes * self.depth
     if output_dir: # Output dir was set by command line option
@@ -62,6 +89,9 @@ class Memory:
     self.tech_node_um = self.tech_node_nm / 1000.0
 
     print(f'Original {self.name} size = {self.width_um} x {self.height_um}')
+    print(f'Port configuration: {self.port_config}')
+    print(f'Write granularity: {self.write_granularity} bits')
+    
     # Adjust to snap
     self.width_um = (math.ceil((self.width_um*1000.0)/self.process.snapWidth_nm)*self.process.snapWidth_nm)/1000.0
     self.height_um = (math.ceil((self.height_um*1000.0)/self.process.snapHeight_nm)*self.process.snapHeight_nm)/1000.0
@@ -77,9 +107,14 @@ class Memory:
   # regarding this memory based on the input parameters from the json
   # configuration file.
   def __run_cacti( self ):
+    # For different port configurations, configure CACTI appropriately
+    rw_ports = self.rw_ports
+    r_ports = self.r_ports if hasattr(self, 'r_ports') else 0
+    w_ports = 0
+    
     fid = open(os.sep.join([self.results_dir,'cacti.cfg']), 'w')
     fid.write( cacti_config.format( self.total_size
-             , self.width_in_bytes, self.rw_ports, 0, 0
+             , self.width_in_bytes, rw_ports, r_ports, w_ports
              , self.process.tech_um, self.width_in_bytes*8, self.num_banks
              , self.cache_type ))
     fid.close()
