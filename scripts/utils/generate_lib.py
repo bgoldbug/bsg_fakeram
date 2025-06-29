@@ -359,8 +359,16 @@ def write_control_pin(f, pin_name, sram_name, cap, power, tsetup, thold, slew_in
     f.write('        capacitance : %.3f;\n' % cap)
     if active_low:
         f.write('        /* Active Low Signal */\n')
-    write_timing_constraint(f, sram_name, pin_name.replace('0','0').replace('1','1').replace('csb','clk').replace('web','clk'), 
-                           tsetup, thold, slew_indicies)
+    
+    # Determine the related clock pin
+    if '0' in pin_name:
+        related_clk = 'clk0'
+    elif '1' in pin_name:
+        related_clk = 'clk1'
+    else:
+        related_clk = 'clk0'  # Default
+    
+    write_timing_constraint(f, sram_name, related_clk, tsetup, thold, slew_indicies)
     write_internal_power(f, sram_name, power, slew_indicies)
     f.write('    }\n')
 

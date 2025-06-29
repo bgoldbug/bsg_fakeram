@@ -65,6 +65,11 @@ def generate_verilog(mem, tmChkExpand=False):
       
       # Generate RW port logic based on write mode
       rw_port_logic = generate_rw_port_logic(write_mode, has_byte_write)
+      # Replace the byte_write_logic placeholder in the RW port logic
+      rw_port_logic = rw_port_logic.format(byte_write_logic=byte_write_logic,
+                                             data_width=bits,
+                                             BITS=bits,
+                                             ADDR_WIDTH=addr_width)
       
       f.write(VLOG_SPECIALIZED_1RW1R_TEMPLATE.format(
         name=name, 
@@ -81,12 +86,18 @@ def generate_verilog(mem, tmChkExpand=False):
       ))
     else:
       # For 1RW only (though not used in specialized logic examples)
+      write_mode = mem.write_mode if hasattr(mem, 'write_mode') else 'write_first'
+      # Generate RW port logic for 1RW case
+      rw_port_logic_1rw = generate_rw_port_logic_1rw(write_mode)
+      
       f.write(VLOG_SPECIALIZED_1RW_TEMPLATE.format(
         name=name, 
         data_width=bits, 
         depth=depth, 
         addr_width=addr_width,
-        setuphold_checks=setuphold_checks
+        setuphold_checks=setuphold_checks,
+        rw_port_logic=rw_port_logic_1rw,
+        write_mode_comment=f'// Write mode: {write_mode}'
       ))
 
 def generate_rw_port_logic(write_mode, has_byte_write):
@@ -151,15 +162,67 @@ def generate_rw_port_logic(write_mode, has_byte_write):
    
    assign dout0 = dout0_reg;'''
 
+def generate_rw_port_logic_1rw(write_mode):
+  '''Generate the RW port logic for single-port SRAM based on write mode'''
+  if write_mode == 'write_first':
+    return '''   // Read-Write Port with Write-First behavior
+   reg [ADDR_WIDTH-1:0] addr0_reg;
+   
+   always @(posedge clk0) begin
+      if (!csb0) begin  // Active low chip select
+         if (!web0) begin  // Active low write enable
+            mem[addr0] <= din0;
+         end
+         addr0_reg <= addr0;
+      end
+   end
+   
+   assign dout0 = mem[addr0_reg];'''
+  
+  elif write_mode == 'read_first':
+    return '''   // Read-Write Port with Read-First behavior
+   reg [BITS-1:0] dout0_reg;
+   
+   always @(posedge clk0) begin
+      if (!csb0) begin  // Active low chip select
+         dout0_reg <= mem[addr0];  // Read first
+         if (!web0) begin
+            mem[addr0] <= din0;
+         end
+      end
+   end
+   
+   assign dout0 = dout0_reg;'''
+  
+  else:  # write_through
+    return '''   // Read-Write Port with Write-Through behavior
+   reg [BITS-1:0] dout0_reg;
+   
+   always @(posedge clk0) begin
+      if (!csb0) begin
+         if (!web0) begin
+            mem[addr0] <= din0;
+         end
+      end
+   end
+   
+   always @(*) begin
+      if (!csb0)
+         dout0_reg = mem[addr0];
+      else
+         dout0_reg = {BITS{1'bx}};
+   end
+   
+   assign dout0 = dout0_reg;'''
+
 def generate_byte_write_logic(has_byte_write, num_bytes):
   '''Generate the byte-write logic for memories that support it'''
   if not has_byte_write:
     return 'mem[addr0] <= din0;'
   
   logic = ''
-  logic += f'''if (wmask0[0])
-              mem[addr0][7:0] <= din0[7:0];\n'''
-  for i in range(1,num_bytes):
+  logic += f'if (wmask0[0])\n'
+  for i in range(1, num_bytes):
     logic += f'''            if (wmask0[{i}])
               mem[addr0][{i*8+7}:{i*8}] <= din0[{i*8+7}:{i*8}];\n'''
   return logic.rstrip()
@@ -199,9 +262,10 @@ def generate_verilog_bb(mem):
       ))
 
     else:
-      bb_byte_write_params = ''
-      bb_byte_write_port = ''
-      bb_byte_write_decl = ''
+       bb_byte_write_params = ''
+       bb_byte_write_port = ''
+       bb_byte_write_decl = ''
+
 # Template for specialized 1RW+1R SRAM matching buffered_liteeth SRAMs
 VLOG_SPECIALIZED_1RW1R_TEMPLATE = '''\
 module {name} (
@@ -238,34 +302,21 @@ module {name} (
    input                    web0;  // Active low write enable
 {byte_write_decl}   input  [ADDR_WIDTH-1:0]  addr0;
    input  [BITS-1:0]        din0;
-   output reg [BITS-1:0]    dout0;
+   output [BITS-1:0]        dout0;
    
    // Port 1: R
    input                    clk1;
    input                    csb1;  // Active low chip select
    input  [ADDR_WIDTH-1:0]  addr1;
-   output reg [BITS-1:0]    dout1;
+   output [BITS-1:0]        dout1;
 
    // Memory array
    reg    [BITS-1:0]        mem [0:WORD_DEPTH-1];
 
    integer i;
 
-   // Port 0: Read-Write Port with Write-First behavior
-   reg [ADDR_WIDTH-1:0] addr0_reg;
-   
-   always @(posedge clk0) begin
-      if (!csb0 && !web0) begin  // Active low chip select
-         if (BITS == {data_width}) begin  // Active low write enable - writing when web0=0
-            {byte_write_logic}
-         end
-         // Always register the address (for write-first behavior)
-         addr0_reg <= addr0;
-      end
-   end
-   
-   // Write-first read: output data from registered address
-   assign dout0 = mem[addr0_reg];
+{write_mode_comment}
+{rw_port_logic}
 
    // Port 1: Read-Only Port
    reg [BITS-1:0] dout1_reg;
@@ -338,20 +389,13 @@ module {name} (
    input                    web0;  // Active low write enable
    input  [ADDR_WIDTH-1:0]  addr0;
    input  [BITS-1:0]        din0;
-   output reg [BITS-1:0]    dout0;
+   output [BITS-1:0]        dout0;
 
    // Memory array
    reg    [BITS-1:0]        mem [0:WORD_DEPTH-1];
 
-   // Read-Write Port
-   always @(posedge clk0) begin
-      if (!csb0) begin  // Active low chip select
-         if (!web0) begin  // Active low write enable
-            mem[addr0] <= din0;
-         end
-         dout0 <= mem[addr0];
-      end
-   end
+{write_mode_comment}
+{rw_port_logic}
 
 endmodule
 '''
@@ -403,22 +447,39 @@ module {name} (
 endmodule
 '''
 
-# Helper to format parameters/ports for byte-write
-def generate_byte_write_params(has_byte_write, num_bytes):
-  if not has_byte_write:
-    return {
-      'byte_write_params': '',
-      'byte_write_port': '',
-      'byte_write_logic': 'mem[addr0] <= din0;',
-      'num_bytes_param': ''
-    }
-  
-  return {
-    'byte_write_params': f'   input  [{num_bytes-1}:0]    wmask0;\n',
-    'byte_write_port': f'   input  [{num_bytes-1}:0]    wmask0;\n',
-    'byte_write_logic': generate_byte_write_logic(True, num_bytes),
-    'num_bytes_param': f'   parameter NUM_BYTES = {num_bytes};\n'
-  }
+# Black box template for specialized 1RW
+VLOG_BB_SPECIALIZED_1RW_TEMPLATE = '''\
+module {name} (
+`ifdef USE_POWER_PINS
+    vdd,
+    gnd,
+`endif
+    clk0,
+    csb0,
+    web0,
+    addr0,
+    din0,
+    dout0
+);
+
+   parameter BITS = {data_width};
+   parameter WORD_DEPTH = {depth};
+   parameter ADDR_WIDTH = {addr_width};
+
+`ifdef USE_POWER_PINS
+   inout vdd;
+   inout gnd;
+`endif
+
+   input                    clk0;
+   input                    csb0;
+   input                    web0;
+   input  [ADDR_WIDTH-1:0]  addr0;
+   input  [BITS-1:0]        din0;
+   output [BITS-1:0]        dout0;
+
+endmodule
+'''
 
 # Update template formatting to handle the conditional parameters
 def format_template(template, **kwargs):
