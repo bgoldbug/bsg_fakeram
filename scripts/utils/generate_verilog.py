@@ -2,10 +2,7 @@ import os
 import math
 
 ################################################################################
-# GENERATE VERILOG VIEW - ACCURATE TO SPECIALIZED LOGIC
-#
 # Generate a .v file based on the given SRAM matching the exact interface
-# used in the specialized logic examples.
 ################################################################################
 
 def generate_verilog(mem, tmChkExpand=False):
@@ -14,218 +11,104 @@ def generate_verilog(mem, tmChkExpand=False):
   depth = int(mem.depth)
   bits  = int(mem.width_in_bits)
   addr_width = math.ceil(math.log2(depth))
+  crpt_on_x  = 1
+
+  # New Additional vars:
+  write_mode               = str(mem.write_mode)
+  rw_clks, r_clks, w_clks  = mem.port_clks
   
-  # Check configuration
-  has_rport = hasattr(mem, 'r_ports') and mem.r_ports > 0
-  has_byte_write = hasattr(mem, 'write_granularity') and mem.write_granularity == 8
-  num_bytes = bits // 8 if has_byte_write else 0
-  write_mode = mem.write_mode if hasattr(mem, 'write_mode') else 'write_first'
+  unique_clks = list(set(x for sub in mem.port_clks for x in sub))
 
-  # Generate the 'setuphold' timing checks for the specialized interface
-  setuphold_checks = ''
-  if tmChkExpand: # per-bit checks
-    setuphold_checks += '      $setuphold (posedge clk0, csb0, 0, 0, notifier);\n'
-    setuphold_checks += '      $setuphold (posedge clk0, web0, 0, 0, notifier);\n'
-    for i in range(addr_width): 
-      setuphold_checks += f'      $setuphold (posedge clk0, addr0[{i}], 0, 0, notifier);\n'
-    for i in range(bits): 
-      setuphold_checks += f'      $setuphold (posedge clk0, din0[{i}], 0, 0, notifier);\n'
-    if has_byte_write:
-      for i in range(num_bytes): 
-        setuphold_checks += f'      $setuphold (posedge clk0, wmask0[{i}], 0, 0, notifier);\n'
-    if has_rport:
-      setuphold_checks += '      $setuphold (posedge clk1, csb1, 0, 0, notifier);\n'
-      for i in range(addr_width): 
-        setuphold_checks += f'      $setuphold (posedge clk1, addr1[{i}], 0, 0, notifier);\n'
-  else: # per-signal checks
-    setuphold_checks += '      $setuphold (posedge clk0, csb0, 0, 0, notifier);\n'
-    setuphold_checks += '      $setuphold (posedge clk0, web0, 0, 0, notifier);\n'
-    setuphold_checks += '      $setuphold (posedge clk0, addr0, 0, 0, notifier);\n'
-    setuphold_checks += '      $setuphold (posedge clk0, din0, 0, 0, notifier);\n'
-    if has_byte_write:
-      setuphold_checks += '      $setuphold (posedge clk0, wmask0, 0, 0, notifier);\n'
-    if has_rport:
-      setuphold_checks += '      $setuphold (posedge clk1, csb1, 0, 0, notifier);\n'
-      setuphold_checks += '      $setuphold (posedge clk1, addr1, 0, 0, notifier);\n'
+  byte_write               = 1 if mem.write_granularity == 8 else 0
+  # Change masking based on wether byte write attribute exists or not
+  
+  #############################################
+  ###   Generate 'setuphold' timing checks  ###
+  #############################################
 
+  # Shortened per-bit and per-signal checks
+  setuphold_checks=''
+  # rw ports setuphold check
+  clk_ctr = 0
+  for ct in range(mem.rw_ports):
+   # Initial check to see if future r or w ports exist (such that we'll label clk differently)
+   if len(unique_clks) == 1: clk_suff = ''  
+   elif clk_ctr < len(rw_clks): 
+      clk_suff=rw_clks[clk_ctr]
+      clk_ctr+=1
+   setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, we_in_rw{ct+1}, 0, 0, notifier);\n'
+   setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, ce_rw{ct+1}, 0, 0, notifier);\n'
+   for i in range(addr_width): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, addr_rw{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
+   for i in range(      bits): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, wd_in{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
+   for i in range(      bits): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, w_mask_rw{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
+  # r ports setuphold check
+  clk_ctr = 0
+  for ct in range(mem.r_ports):
+   if len(unique_clks) == 1: clk_suff = ''  
+   elif clk_ctr < len(r_clks): 
+      clk_suff=r_clks[clk_ctr]
+      clk_ctr+=1
+   setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, ce_r{ct+1}, 0, 0, notifier);\n'
+   for i in range(addr_width): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, addr_r{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
+  
+  # w ports setuphold check
+  clk_ctr = 0
+  for ct in range(mem.w_ports):
+   if len(unique_clks) == 1: clk_suff = ''  
+   elif clk_ctr < len(w_clks): 
+      clk_suff=w_clks[clk_ctr]
+      clk_ctr+=1
+   setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, ce_w{ct+1}, 0, 0, notifier);\n'
+   for i in range(addr_width): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, addr_w{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
+   for i in range(      bits): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, wd_in_w{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
+   for i in range(      bits): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, w_mask_w{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
+  #################################################
+  ###   END Generate 'setuphold' timing checks  ###
+  #################################################
   fout = os.sep.join([mem.results_dir, name + '.v'])
+
   with open(fout, 'w') as f:
-    if has_rport:
-      # Prepare byte-write parameters
-      if has_byte_write:
-        byte_write_port = f'    wmask0,\n'
-        byte_write_decl = f'   input  [{num_bytes-1}:0]    wmask0;\n'
-        byte_write_logic = generate_byte_write_logic(True, num_bytes)
-        num_bytes_param = f'   parameter NUM_BYTES = {num_bytes};\n'
-      else:
-        byte_write_port = ''
-        byte_write_decl = ''
-        byte_write_logic = 'mem[addr0] <= din0;'
-        num_bytes_param = ''
-      
-      # Generate RW port logic based on write mode
-      rw_port_logic = generate_rw_port_logic(write_mode, has_byte_write)
-      # Replace the byte_write_logic placeholder in the RW port logic
-      rw_port_logic = rw_port_logic.format(byte_write_logic=byte_write_logic,
-                                             data_width=bits,
-                                             BITS=bits,
-                                             ADDR_WIDTH=addr_width)
-      
-      f.write(VLOG_SPECIALIZED_1RW1R_TEMPLATE.format(
-        name=name, 
-        data_width=bits, 
-        depth=depth, 
-        addr_width=addr_width,
-        setuphold_checks=setuphold_checks,
-        byte_write_port=byte_write_port,
-        byte_write_decl=byte_write_decl,
-        byte_write_logic=byte_write_logic,
-        num_bytes_param=num_bytes_param,
-        rw_port_logic=rw_port_logic,
-        write_mode_comment=f'// Write mode: {write_mode}'
-      ))
-    else:
-      # For 1RW only (though not used in specialized logic examples)
-      write_mode = mem.write_mode if hasattr(mem, 'write_mode') else 'write_first'
-      # Generate RW port logic for 1RW case
-      rw_port_logic_1rw = generate_rw_port_logic_1rw(write_mode)
-      
-      f.write(VLOG_SPECIALIZED_1RW_TEMPLATE.format(
-        name=name, 
-        data_width=bits, 
-        depth=depth, 
-        addr_width=addr_width,
-        setuphold_checks=setuphold_checks,
-        rw_port_logic=rw_port_logic_1rw,
-        write_mode_comment=f'// Write mode: {write_mode}'
-      ))
+   TEMPLATE_MAPPING = {
+      "1r1w"  : VLOG_TEMPLATE_1r1w,
+      "2r1w"  : VLOG_TEMPLATE_2r1w,
+      "1rw1r" : VLOG_TEMPLATE_1rw1r,
+      "1rw"   : VLOG_TEMPLATE_1rw
+   } 
+   MEM_CONFIG       = {
+      "name": name,
+      "data_width" : bits,
+      "depth" : depth,
+      "addr_width" : addr_width,
+      "crpt_on_x" : crpt_on_x,
+      "setuphold_checks": setuphold_checks
+   }
+   # Memory Specific configs:
+   if mem.port_config == "1r1w":
+      MEM_CONFIG["start_of_rw_p1"] = generate_start_mode_priority(write_mode, "rd_out_r1", "addr_r1", "ce_r1")
+      MEM_CONFIG["end_of_rw_p1"] = generate_end_mode_priority(write_mode, "rd_out_r1", "addr_r1", "ce_r1")
+      MEM_CONFIG["byte_write_logic"] = generate_byte_write_logic(byte_write, bits // 8, 'w1')
+   elif mem.port_config == "1rw":
+      MEM_CONFIG["start_of_rw_p1"] = generate_start_mode_priority(write_mode, "rd_out_rw1", "addr_rw1")
+      MEM_CONFIG["end_of_rw_p1"] = generate_end_mode_priority(write_mode, "rd_out_rw1", "addr_rw1")
+      MEM_CONFIG["byte_write_logic"] = generate_byte_write_logic(byte_write, bits // 8, 'rw1')
+   elif mem.port_config == "2r1w":
+      MEM_CONFIG["start_of_rw_p1"] = generate_start_mode_priority(write_mode, "rd_out_r1", "addr_r1", "ce_r1")
+      MEM_CONFIG["end_of_rw_p1"] = generate_end_mode_priority(write_mode, "rd_out_r1", "addr_r1", "ce_r1")
+      MEM_CONFIG["start_of_rw_p2"] = generate_start_mode_priority(write_mode, "rd_out_r2", "addr_r2", "ce_r2")
+      MEM_CONFIG["end_of_rw_p2"] = generate_end_mode_priority(write_mode, "rd_out_r2", "addr_r2", "ce_r2")
+      MEM_CONFIG["byte_write_logic"] = generate_byte_write_logic(byte_write, bits // 8, 'w1')
+   elif mem.port_config == "1rw1r":
+      MEM_CONFIG["start_of_rw_p1"] = generate_start_mode_priority(write_mode, "rd_out_rw1", "addr_rw1")
+      MEM_CONFIG["end_of_rw_p1"] = generate_end_mode_priority(write_mode, "rd_out_rw1", "addr_rw1")
+      MEM_CONFIG["byte_write_logic"] = generate_byte_write_logic(byte_write, bits // 8, 'rw1')
+   elif mem.port_config not in TEMPLATE_MAPPING:
+      print(f"Listed config '{mem.port_config}' doesn't exist!\nExiting...\n")
+      exit(1)
+   # Generate RW port logic based on write mode
+   f.write(TEMPLATE_MAPPING[mem.port_config].format(**MEM_CONFIG))
 
-def generate_rw_port_logic(write_mode, has_byte_write):
-  '''Generate the RW port logic based on write mode'''
-  if write_mode == 'write_first':
-    # Write-first: register address, read from registered address
-    return '''   // Port 0: Read-Write Port with Write-First behavior
-   reg [ADDR_WIDTH-1:0] addr0_reg;
    
-   always @(posedge clk0) begin
-      if (!csb0 && !web0) begin  // Active low chip select
-         if (BITS == {data_width}) begin  // Active low write enable - writing when web0=0
-            {byte_write_logic}
-         end
-         // Always register the address (for write-first behavior)
-         addr0_reg <= addr0;
-      end
-   end
-   
-   // Write-first read: output data from registered address
-   assign dout0 = mem[addr0_reg];'''
-  
-  elif write_mode == 'read_first':
-    # Read-first: read old data before write
-    return '''   // Port 0: Read-Write Port with Read-First behavior
-   reg [BITS-1:0] dout0_reg;
-   
-   always @(posedge clk0) begin
-      if (!csb0) begin  // Active low chip select
-         // Read-first: capture data before potential write
-         dout0_reg <= mem[addr0];
-         
-         if (!web0) begin  // Active low write enable - writing when web0=0
-            {byte_write_logic}
-         end
-      end
-   end
-   
-   // Read-first: output registered old data
-   assign dout0 = dout0_reg;'''
-  
-  else:  # write_through (combinational read)
-    # Write-through: combinational read path
-    return '''   // Port 0: Read-Write Port with Write-Through behavior
-   reg [BITS-1:0] dout0_reg;
-   
-   always @(posedge clk0) begin
-      if (!csb0) begin  // Active low chip select
-         if (!web0) begin  // Active low write enable - writing when web0=0
-            {byte_write_logic}
-         end
-      end
-   end
-   
-   // Write-through: combinational read from current address
-   always @(*) begin
-      if (!csb0)
-         dout0_reg = mem[addr0];
-      else
-         dout0_reg = {BITS{1'bx}};
-   end
-   
-   assign dout0 = dout0_reg;'''
 
-def generate_rw_port_logic_1rw(write_mode):
-  '''Generate the RW port logic for single-port SRAM based on write mode'''
-  if write_mode == 'write_first':
-    return '''   // Read-Write Port with Write-First behavior
-   reg [ADDR_WIDTH-1:0] addr0_reg;
-   
-   always @(posedge clk0) begin
-      if (!csb0) begin  // Active low chip select
-         if (!web0) begin  // Active low write enable
-            mem[addr0] <= din0;
-         end
-         addr0_reg <= addr0;
-      end
-   end
-   
-   assign dout0 = mem[addr0_reg];'''
-  
-  elif write_mode == 'read_first':
-    return '''   // Read-Write Port with Read-First behavior
-   reg [BITS-1:0] dout0_reg;
-   
-   always @(posedge clk0) begin
-      if (!csb0) begin  // Active low chip select
-         dout0_reg <= mem[addr0];  // Read first
-         if (!web0) begin
-            mem[addr0] <= din0;
-         end
-      end
-   end
-   
-   assign dout0 = dout0_reg;'''
-  
-  else:  # write_through
-    return '''   // Read-Write Port with Write-Through behavior
-   reg [BITS-1:0] dout0_reg;
-   
-   always @(posedge clk0) begin
-      if (!csb0) begin
-         if (!web0) begin
-            mem[addr0] <= din0;
-         end
-      end
-   end
-   
-   always @(*) begin
-      if (!csb0)
-         dout0_reg = mem[addr0];
-      else
-         dout0_reg = {BITS{1'bx}};
-   end
-   
-   assign dout0 = dout0_reg;'''
-
-def generate_byte_write_logic(has_byte_write, num_bytes):
-  '''Generate the byte-write logic for memories that support it'''
-  if not has_byte_write:
-    return 'mem[addr0] <= din0;'
-  
-  logic = ''
-  logic += f'if (wmask0[0])\n'
-  for i in range(1, num_bytes):
-    logic += f'''            if (wmask0[{i}])
-              mem[addr0][{i*8+7}:{i*8}] <= din0[{i*8+7}:{i*8}];\n'''
-  return logic.rstrip()
 
 def generate_verilog_bb(mem):
   '''Generate a verilog black-box view for the RAM'''
@@ -233,118 +116,270 @@ def generate_verilog_bb(mem):
   depth = int(mem.depth)
   bits  = int(mem.width_in_bits)
   addr_width = math.ceil(math.log2(depth))
-  
   has_rport = hasattr(mem, 'r_ports') and mem.r_ports > 0
-  has_byte_write = hasattr(mem, 'write_granularity') and mem.write_granularity == 8
-  num_bytes = bits // 8 if has_byte_write else 0
-
+  byte_write = hasattr(mem, 'write_granularity') and mem.write_granularity == 8
+  crpt_on_x = 1
   fout = os.sep.join([mem.results_dir, name + '.bb.v'])
   with open(fout, 'w') as f:
-    if has_rport:
       # Prepare byte-write parameters for black box
-      if has_byte_write:
-        bb_byte_write_params = f'   parameter NUM_BYTES = {num_bytes};\n'
-        bb_byte_write_port = f'    wmask0,\n'
-        bb_byte_write_decl = f'   input  [{num_bytes-1}:0]    wmask0;\n'
+      BB_TEMPLATE_MAPPING = {
+         "1r1w"  : VLOG_BB_TEMPLATE_1r1w,
+         "2r1w"  : VLOG_BB_TEMPLATE_2r1w,
+         "1rw1r" : VLOG_BB_TEMPLATE_1rw1r,
+         "1rw"   : VLOG_BB_TEMPLATE_1rw
+      } 
+      # Configs that all fakeram memory will require 
+      BB_MEM_CONFIG       = {
+         "name": name,
+         "data_width" : bits,
+         "depth" : depth,
+         "addr_width" : addr_width,
+         "crpt_on_x" : crpt_on_x
+      }
+
+      if mem.port_config not in BB_TEMPLATE_MAPPING:
+         print(f"Listed config '{mem.port_config}' doesn't exist!\n")
+         exit(1)
+
+      f.write(BB_TEMPLATE_MAPPING[mem.port_config].format(**BB_MEM_CONFIG))
+
+# Dynamic write mode setup. Specialized check for ce read mode
+def generate_start_mode_priority(write_mode, regname, addrname, ce_r=None,):
+   if write_mode == 'read_first':
+      if (ce_r):
+         return f'''      
+         if ({ce_r})
+            {regname} <= mem[{addrname}];
+         else
+            {regname} <= 'x;'''
       else:
-        bb_byte_write_params = ''
-        bb_byte_write_port = ''
-        bb_byte_write_decl = ''
-        
-      f.write(VLOG_BB_SPECIALIZED_1RW1R_TEMPLATE.format(
-        name=name, 
-        data_width=bits, 
-        depth=depth, 
-        addr_width=addr_width,
-        byte_write_params=bb_byte_write_params,
-        byte_write_port=bb_byte_write_port,
-        byte_write_decl=bb_byte_write_decl
-      ))
+         return f"{regname} <= mem[{addrname}];"
+   else:
+      return ''
 
-    else:
-       bb_byte_write_params = ''
-       bb_byte_write_port = ''
-       bb_byte_write_decl = ''
+def generate_end_mode_priority(write_mode, regname, addrname, ce_r=None,):
+   if write_mode == 'read_first':
+      return ''
+   else:
+      if (ce_r):
+         return f'''      
+         if ({ce_r})
+            {regname} <= mem[{addrname}];
+         else
+            {regname} <= 'x;'''
+      else:
+         return f"{regname} <= mem[{addrname}];"
 
-# Template for specialized 1RW+1R SRAM matching buffered_liteeth SRAMs
-VLOG_SPECIALIZED_1RW1R_TEMPLATE = '''\
+def generate_byte_write_logic(byte_write, num_bytes, portnum):
+  '''Generate the byte-write logic for memories that support it'''
+  if not byte_write:
+    return f'mem[addr_{portnum}] <= (wd_in_{portnum} & w_mask_{portnum}) | (mem[addr_{portnum}] & ~w_mask_{portnum});'
+  else:
+    return f'mem[addr_{portnum}][{num_bytes*8+7}:{num_bytes*8}] <= (wd_in_{portnum}[{num_bytes*8+7}:{num_bytes*8}] & w_mask_{portnum}[{num_bytes*8+7}:{num_bytes*8}]) | (mem[addr_{portnum}][{num_bytes*8+7}:{num_bytes*8}] & ~w_mask_{portnum}[{num_bytes*8+7}:{num_bytes*8}]);'
+
+
+VLOG_TEMPLATE_1r1w = '''\
+module {name}
+(
+   clk,
+   rd_out_r1,
+   addr_r1,
+   addr_w1,
+   we_in_w1,
+   wd_in_w1,
+   w_mask_w1,
+   ce_r1,
+   ce_w1
+);
+   parameter BITS = {data_width};
+   parameter WORD_DEPTH = {depth};
+   parameter ADDR_WIDTH = {addr_width};
+   parameter corrupt_mem_on_X_p = {crpt_on_x};
+
+   output reg [BITS-1:0]    rd_out_r1;
+   input  [ADDR_WIDTH-1:0]  addr_r1;
+   input  [ADDR_WIDTH-1:0]  addr_w1;
+   input                    we_in_w1;
+   input  [BITS-1:0]        wd_in_w1;
+   input  [BITS-1:0]   w_mask_w1;
+   input                    clk;
+   input                    ce_r1;
+   input                    ce_w1;
+
+   reg    [BITS-1:0]        mem [0:WORD_DEPTH-1];
+   integer j;
+
+   always @(posedge clk)
+   begin
+      // Write port
+      {start_of_rw_p1}
+      if (ce_w1)
+      begin
+         if (corrupt_mem_on_X_p && ((^we_in_w === 1'bx) || (^addr_w === 1'bx)))
+         begin
+            for (j = 0; j < WORD_DEPTH; j = j + 1)
+               mem[j] <= 'x;
+         end
+         else if (we_in_w1)
+         begin
+            {byte_write_logic}
+         end
+      end
+      {end_of_rw_p1}
+   end
+   `ifdef SRAM_TIMING
+   reg notifier;
+   specify
+      (posedge clk *> rd_out_r1) = (0, 0);
+      $width     (posedge clk, 0, 0, notifier);
+      $width     (negedge clk, 0, 0, notifier);
+      $period    (posedge clk, 0, notifier);
+{setuphold_checks}
+   endspecify
+   `endif
+
+endmodule
+'''
+
+VLOG_TEMPLATE_2r1w = '''\
+module {name}
+(
+   clk,
+   rd_out_r1,
+   rd_out_r2,
+   addr_r1,
+   addr_r2,
+   addr_w1,
+   we_in_w1,
+   wd_in_w1,
+   w_mask_w1,
+   ce_r1,
+   ce_r2,
+   ce_w1
+);
+   parameter BITS = {data_width};
+   parameter WORD_DEPTH = {depth};
+   parameter ADDR_WIDTH = {addr_width};
+   parameter corrupt_mem_on_X_p = {crpt_on_x};
+
+   output reg [BITS-1:0]    rd_out_r1;
+   output reg [BITS-1:0]    rd_out_r2;
+   input  [ADDR_WIDTH-1:0]  addr_r1;
+   input  [ADDR_WIDTH-1:0]  addr_r2;
+   input  [ADDR_WIDTH-1:0]  addr_w1;
+   input                    we_in_w1;
+   input  [BITS-1:0]        wd_in_w1;
+   input  [BITS-1:0]   w_mask_w1;
+   input                    clk;
+   input                    ce_r1;
+   input                    ce_r2;
+   input                    ce_w1;
+
+   reg    [BITS-1:0]        mem [0:WORD_DEPTH-1];
+   integer j;
+
+   always @(posedge clk)
+   begin
+      {start_of_rw_p1}
+      {start_of_rw_p2}
+      // Write port
+      if (ce_w1)
+      begin
+         if (corrupt_mem_on_X_p && ((^we_in_w === 1'bx) || (^addr_w === 1'bx)))
+         begin
+            for (j = 0; j < WORD_DEPTH; j = j + 1)
+               mem[j] <= 'x;
+         end
+         else if (we_in_w1)
+         begin
+            {byte_write_logic}
+         end
+      end
+      {end_of_rw_p1}
+      {end_of_rw_p1}
+   end
+
+   `ifdef SRAM_TIMING
+   reg notifier;
+   specify
+      (posedge clk *> rd_out_r1) = (0, 0);
+      (posedge clk *> rd_out_r2) = (0, 0);
+      $width     (posedge clk, 0, 0, notifier);
+      $width     (negedge clk, 0, 0, notifier);
+      $period    (posedge clk, 0, notifier);
+{setuphold_checks}
+   endspecify
+   `endif
+endmodule '''
+
+VLOG_TEMPLATE_1rw1r = '''\
 module {name} (
-`ifdef USE_POWER_PINS
-    vdd,
-    gnd,
-`endif
     // Port 0: RW (Write/Read Port)
     clk0,
-    csb0,
-    web0,
-{byte_write_port}    addr0,
-    din0,
-    dout0,
+    ce_rw1,
+    we_in_rw1,
+    w_mask_rw1,
+    addr_rw1,
+    wd_in_rw1,
+    rd_out_rw1,
     // Port 1: R (Read-Only Port)
     clk1,
-    csb1,
-    addr1,
-    dout1
+    ce_r1,
+    addr_r1,
+    rd_out_r1
 );
 
    parameter BITS = {data_width};
    parameter WORD_DEPTH = {depth};
    parameter ADDR_WIDTH = {addr_width};
-{num_bytes_param}
-`ifdef USE_POWER_PINS
-   inout vdd;
-   inout gnd;
-`endif
+
 
    // Port 0: RW
    input                    clk0;
-   input                    csb0;  // Active low chip select
-   input                    web0;  // Active low write enable
-{byte_write_decl}   input  [ADDR_WIDTH-1:0]  addr0;
-   input  [BITS-1:0]        din0;
-   output [BITS-1:0]        dout0;
+   input                    ce_rw1;
+   input                    we_in_rw1;
+   input  [BITS-1:0]        w_mask_rw1;
+   input  [ADDR_WIDTH-1:0]  addr_rw1;
+   input  [BITS-1:0]        wd_in_rw1;
+   output [BITS-1:0]        rd_out_rw1;
    
    // Port 1: R
    input                    clk1;
-   input                    csb1;  // Active low chip select
-   input  [ADDR_WIDTH-1:0]  addr1;
-   output [BITS-1:0]        dout1;
+   input                    ce_r1;
+   input  [ADDR_WIDTH-1:0]  addr_r1;
+   output [BITS-1:0]        rd_out_r1;
 
    // Memory array
    reg    [BITS-1:0]        mem [0:WORD_DEPTH-1];
 
    integer i;
 
-{write_mode_comment}
-{rw_port_logic}
-
-   // Port 1: Read-Only Port
-   reg [BITS-1:0] dout1_reg;
+   always @(posedge clk0) begin
+      if(ce_rw1) 
+      begin
+         {start_of_rw_p1}
+         if (we_in_rw1)   
+         begin
+            {byte_write_logic}
+         end
+         {end_of_rw_p1}
+      end
+   end
+   
    
    always @(posedge clk1) begin
-      if (!csb1) begin  // Active low chip select
-         dout1_reg <= mem[addr1];
+      if (!ce_r1) begin  // Active low chip select
+         rd_out_r1 <= mem[addr_r1];
       end
    end
    
-   assign dout1 = dout1_reg;
 
-   // X-propagation and debug logic (optional)
-   `ifdef SRAM_MONITOR
-   always @(posedge clk0) begin
-      if (!csb0 && !web0) begin
-         $display("%t: %m writing addr0=%h din0=%h", $time, addr0, din0);
-      end
-   end
-   `endif
-
-   // Timing check placeholders
-   `ifdef SRAM_TIMING_CHECK
+   `ifdef SRAM_TIMING
    reg notifier;
    specify
       // Delays from clk to outputs (registered outputs)
-      (posedge clk0 *> dout0) = (0, 0);
-      (posedge clk1 *> dout1) = (0, 0);
+      (posedge clk0 *> rd_out_rw1) = (0, 0);
+      (posedge clk1 *> rd_out_r1) = (0, 0);
 
       // Timing checks
       $width     (posedge clk0,              0, 0, notifier);
@@ -360,133 +395,203 @@ module {name} (
 endmodule
 '''
 
-# Template for specialized 1RW SRAM (if needed)
-VLOG_SPECIALIZED_1RW_TEMPLATE = '''\
-module {name} (
-`ifdef USE_POWER_PINS
-    vdd,
-    gnd,
-`endif
-    clk0,
-    csb0,
-    web0,
-    addr0,
-    din0,
-    dout0
+VLOG_TEMPLATE_1rw = '''\
+module {name}
+(
+   rd_out_rw1,
+   addr_rw1,
+   we_in_rw1,
+   wd_in_rw1,
+   w_mask_rw1,
+   clk,
+   ce_rw1
 );
-
    parameter BITS = {data_width};
    parameter WORD_DEPTH = {depth};
    parameter ADDR_WIDTH = {addr_width};
+   parameter corrupt_mem_on_X_p = {crpt_on_x};
 
-`ifdef USE_POWER_PINS
-   inout vdd;
-   inout gnd;
-`endif
+   output reg [BITS-1:0]    rd_out_rw1;
+   input  [ADDR_WIDTH-1:0]  addr_rw1;
+   input                    we_in_rw1;
+   input  [BITS-1:0]        wd_in_rw1;
+   input  [BITS-1:0]        w_mask_rw1;
+   input                    clk;
+   input                    ce_rw1;
 
-   input                    clk0;
-   input                    csb0;  // Active low chip select
-   input                    web0;  // Active low write enable
-   input  [ADDR_WIDTH-1:0]  addr0;
-   input  [BITS-1:0]        din0;
-   output [BITS-1:0]        dout0;
-
-   // Memory array
    reg    [BITS-1:0]        mem [0:WORD_DEPTH-1];
 
-{write_mode_comment}
-{rw_port_logic}
+   integer j;
+
+   always @(posedge clk)
+   begin
+      if (ce_rw1)
+      begin
+         {start_of_rw_p1}
+         if (corrupt_mem_on_X_p &&
+             ((^we_in_rw1 === 1'bx) || (^addr_rw1 === 1'bx))
+            )
+         begin
+            // WEN or ADDR is unknown, so corrupt entire array (using unsynthesizeable for loop)
+            for (j = 0; j < WORD_DEPTH; j = j + 1)
+               mem[j] <= 'x;
+         end
+         else if (we_in_rw1)
+         begin
+            {byte_write_logic}
+         end
+         // read
+         {end_of_rw_p1}
+      end
+      else
+      begin
+         // Make sure read fails if ce_in is low
+         rd_out <= 'x;
+      end
+   end
+
+   // Timing check placeholders (will be replaced during SDF back-annotation)
+   reg notifier;
+   specify
+      // Delay from clk to rd_out
+      (posedge clk *> rd_out_r1) = (0, 0);
+
+      // Timing checks
+      $width     (posedge clk,               0, 0, notifier);
+      $width     (negedge clk,               0, 0, notifier);
+      $period    (posedge clk,               0,    notifier);
+{setuphold_checks}
+   endspecify
 
 endmodule
 '''
+VLOG_BB_TEMPLATE_1r1w = '''\
+module {name}
+(
+   clk,
+   rd_out_r1,
+   addr_r1,
+   addr_w1,
+   we_in_w1,
+   wd_in_w1,
+   w_mask_w1,
+   ce_r1,
+   ce_w1
+);
+   parameter BITS = {data_width};
+   parameter WORD_DEPTH = {depth};
+   parameter ADDR_WIDTH = {addr_width};
+   parameter corrupt_mem_on_X_p = {crpt_on_x};
 
-# Black box template for specialized 1RW+1R
-VLOG_BB_SPECIALIZED_1RW1R_TEMPLATE = '''\
+   output reg [BITS-1:0]    rd_out_r1;
+   input  [ADDR_WIDTH-1:0]  addr_r1;
+   input  [ADDR_WIDTH-1:0]  addr_w1;
+   input                    we_in_w1;
+   input  [BITS-1:0]        wd_in_w1;
+   input  [BITS-1:0]        w_mask_w1;
+   input                    clk;
+   input                    ce_r1;
+   input                    ce_w1;
+endmodule'''
+
+VLOG_BB_TEMPLATE_2r1w = '''\
+module {name}
+(
+   clk,
+   rd_out_r1,
+   rd_out_r2,
+   addr_r1,
+   addr_r2,
+   addr_w1,
+   we_in_w1,
+   wd_in_w1,
+   w_mask_w1,
+   ce_r1,
+   ce_r2,
+   ce_w1
+);
+   parameter BITS = {data_width};
+   parameter WORD_DEPTH = {depth};
+   parameter ADDR_WIDTH = {addr_width};
+   parameter corrupt_mem_on_X_p = {crpt_on_x};
+
+   output reg [BITS-1:0]    rd_out_r1;
+   output reg [BITS-1:0]    rd_out_r2;
+   input  [ADDR_WIDTH-1:0]  addr_r1;
+   input  [ADDR_WIDTH-1:0]  addr_r2;
+   input  [ADDR_WIDTH-1:0]  addr_w;
+   input                    we_in_w1;
+   input  [BITS-1:0]        wd_in_w1;
+   input  [BITS-1:0]   w_mask_w1;
+   input                    clk;
+   input                    ce_r1;
+   input                    ce_r2;
+   input                    ce_w1;
+endmodule'''
+
+VLOG_BB_TEMPLATE_1rw1r = '''\
 module {name} (
-`ifdef USE_POWER_PINS
-    vdd,
-    gnd,
-`endif
-    // Port 0: RW
+    // Port 0: RW (Write/Read Port)
     clk0,
-    csb0,
-    web0,
-{byte_write_port}    addr0,
-    din0,
-    dout0,
-    // Port 1: R
+    ce_rw1,
+    we_in_rw1,
+    w_mask_rw1,
+    addr_rw1,
+    wd_in_rw1,
+    rd_out_rw1,
+    // Port 1: R (Read-Only Port)
     clk1,
-    csb1,
-    addr1,
-    dout1
+    ce_r1,
+    addr_r1,
+    rd_out_r1
 );
 
    parameter BITS = {data_width};
    parameter WORD_DEPTH = {depth};
    parameter ADDR_WIDTH = {addr_width};
-{byte_write_params}
-`ifdef USE_POWER_PINS
-   inout vdd;
-   inout gnd;
-`endif
+
 
    // Port 0: RW
    input                    clk0;
-   input                    csb0;
-   input                    web0;
-{byte_write_decl}   input  [ADDR_WIDTH-1:0]  addr0;
-   input  [BITS-1:0]        din0;
-   output [BITS-1:0]        dout0;
+   input                    ce_rw1;
+   input                    we_in_rw1;
+   input  [BITS-1:0]        w_mask_rw1;
+   input  [ADDR_WIDTH-1:0]  addr_rw1;
+   input  [BITS-1:0]        wd_in_rw1;
+   output [BITS-1:0]        rd_out_rw1;
    
    // Port 1: R
    input                    clk1;
-   input                    csb1;
-   input  [ADDR_WIDTH-1:0]  addr1;
-   output [BITS-1:0]        dout1;
-
+   input                    ce_r1;
+   input  [ADDR_WIDTH-1:0]  addr_r1;
+   output [BITS-1:0]        rd_out_r1;
 endmodule
 '''
 
-# Black box template for specialized 1RW
-VLOG_BB_SPECIALIZED_1RW_TEMPLATE = '''\
-module {name} (
-`ifdef USE_POWER_PINS
-    vdd,
-    gnd,
-`endif
-    clk0,
-    csb0,
-    web0,
-    addr0,
-    din0,
-    dout0
+# Template for a verilog 1rw RAM interface
+VLOG_BB_TEMPLATE_1rw = '''\
+module {name}
+(
+   rd_out_rw1,
+   addr_rw1,
+   we_in_rw1,
+   wd_in_rw1,
+   w_mask_rw1,
+   clk,
+   ce_rw1
 );
-
    parameter BITS = {data_width};
    parameter WORD_DEPTH = {depth};
    parameter ADDR_WIDTH = {addr_width};
+   parameter corrupt_mem_on_X_p = {crpt_on_x};
 
-`ifdef USE_POWER_PINS
-   inout vdd;
-   inout gnd;
-`endif
-
-   input                    clk0;
-   input                    csb0;
-   input                    web0;
-   input  [ADDR_WIDTH-1:0]  addr0;
-   input  [BITS-1:0]        din0;
-   output [BITS-1:0]        dout0;
+   output reg [BITS-1:0]    rd_out_rw1;
+   input  [ADDR_WIDTH-1:0]  addr_rw1;
+   input                    we_in_rw1;
+   input  [BITS-1:0]        wd_in_rw1;
+   input  [BITS-1:0]        w_mask_rw1;
+   input                    clk;
+   input                    ce_rw1;
 
 endmodule
 '''
-
-# Update template formatting to handle the conditional parameters
-def format_template(template, **kwargs):
-  '''Format template with proper parameter handling'''
-  # Handle byte-write specific formatting
-  if 'has_byte_write' in kwargs:
-    params = generate_byte_write_params(kwargs['has_byte_write'], kwargs.get('num_bytes', 0))
-    kwargs.update(params)
-  
-  return template.format(**kwargs)

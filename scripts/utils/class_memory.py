@@ -1,4 +1,5 @@
 import math
+import re
 import os
 import sys
 from pathlib import Path
@@ -29,28 +30,41 @@ class Memory:
     
     # Handle different port configurations
     if self.port_config == '1rw1r':
-        self.rw_ports = 1
-        self.r_ports = 1
-        self.total_ports = 2
-        self.port_order = '1rw1r'  # Port 0 is RW, Port 1 is R
+      self.rw_ports = 1
+      self.r_ports = 1
+      self.w_ports = 0
     elif self.port_config == '1r1rw':
-        self.rw_ports = 1
-        self.r_ports = 1
-        self.total_ports = 2
-        self.port_order = '1r1rw'  # Port 0 is R, Port 1 is RW
-    else:
-        self.rw_ports = 1
-        self.r_ports = 0
-        self.total_ports = 1
-        self.port_order = '1rw'
+      self.rw_ports = 1
+      self.r_ports = 1
+      self.w_ports = 0
+    elif self.port_config == '1r1w':
+      self.rw_ports = 0
+      self.r_ports = 1
+      self.w_ports = 1
+    elif self.port_config == '2r1w':
+      self.rw_ports = 0
+      self.r_ports = 2
+      self.w_ports = 1
+    elif self.port_config == '1rw1r':
+      self.rw_ports = 1
+      self.r_ports = 1
+      self.w_ports = 0
+    else: # 1rw
+      self.rw_ports = 1
+      self.r_ports = 0
+      self.w_ports = 0
     
     # Write granularity (default to bit-level if not specified)
     self.write_granularity = int(sram_data.get('write_granularity', 1))
     
     # Write mode (default to write-first if not specified)
     # Options: 'write_first' (write-through), 'read_first' (no-change), 'write_through' (combinational)
-    self.write_mode = str(sram_data.get('write_mode', 'write_first'))
-    
+    self.write_mode    = str(sram_data.get('write_mode', 'write_first'))
+
+    # clk_ct array contains the amount of clks for rw, r, and w ports respectively
+    self.port_clks = [ list(map(int, re.findall(r'-?\d+', clk_grp))) for clk_grp in re.findall(r'\[[^\]]*\]|(?<=,)\s*(?=,|$)|^\s*(?=,|$)', 
+                        sram_data.get('port_clks', '[1], [0], [0]').strip())]
+    print(self.port_clks)
     self.width_in_bytes = math.ceil(self.width_in_bits / 8.0)
     self.total_size     = self.width_in_bytes * self.depth
     if output_dir: # Output dir was set by command line option
@@ -110,7 +124,7 @@ class Memory:
     # For different port configurations, configure CACTI appropriately
     rw_ports = self.rw_ports
     r_ports = self.r_ports if hasattr(self, 'r_ports') else 0
-    w_ports = 0
+    w_ports = self.w_ports if hasattr(self, 'w_ports') else 0
     
     fid = open(os.sep.join([self.results_dir,'cacti.cfg']), 'w')
     fid.write( cacti_config.format( self.total_size

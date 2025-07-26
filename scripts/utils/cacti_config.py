@@ -88,4 +88,3 @@ cacti_config = '''# cacti.cfg
 -DIMM model "ALL"
 -mirror_in_bob "F"
 '''
-
