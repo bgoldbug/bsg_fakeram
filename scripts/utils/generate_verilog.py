@@ -38,9 +38,14 @@ def generate_verilog(mem, tmChkExpand=False):
       clk_ctr+=1
    setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, we_in_rw{ct+1}, 0, 0, notifier);\n'
    setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, ce_rw{ct+1}, 0, 0, notifier);\n'
-   for i in range(addr_width): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, addr_rw{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
-   for i in range(      bits): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, wd_in{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
-   for i in range(      bits): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, w_mask_rw{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
+   if tmChkExpand: # per-bit
+      for i in range(addr_width): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, addr_rw{ct+1}{i}, 0, 0, notifier);\n'
+      for i in range(      bits): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, wd_in{ct+1}{i}, 0, 0, notifier);\n'
+      for i in range(      bits): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, w_mask_rw{ct+1}{i}, 0, 0, notifier);\n'
+   else:           # per-sig
+      setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, addr_rw{ct+1}, 0, 0, notifier);\n'
+      setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, wd_in{ct+1}, 0, 0, notifier);\n'
+      setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, w_mask_rw{ct+1}, 0, 0, notifier);\n'
   # r ports setuphold check
   clk_ctr = 0
   for ct in range(mem.r_ports):
@@ -49,7 +54,10 @@ def generate_verilog(mem, tmChkExpand=False):
       clk_suff=r_clks[clk_ctr]
       clk_ctr+=1
    setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, ce_r{ct+1}, 0, 0, notifier);\n'
-   for i in range(addr_width): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, addr_r{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
+   if tmChkExpand: # per-bit
+      for i in range(addr_width): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, addr_r{ct+1}{i}, 0, 0, notifier);\n'
+   else:           # per-sig
+      setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, addr_r{ct+1}, 0, 0, notifier);\n'
   
   # w ports setuphold check
   clk_ctr = 0
@@ -59,9 +67,14 @@ def generate_verilog(mem, tmChkExpand=False):
       clk_suff=w_clks[clk_ctr]
       clk_ctr+=1
    setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, ce_w{ct+1}, 0, 0, notifier);\n'
-   for i in range(addr_width): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, addr_w{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
-   for i in range(      bits): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, wd_in_w{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
-   for i in range(      bits): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, w_mask_w{ct+1}{f'[{i}]' if tmChkExpand else ''}, 0, 0, notifier);\n'
+   if tmChkExpand: # per-bit
+      for i in range(addr_width): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, addr_w{ct+1}{i}, 0, 0, notifier);\n'
+      for i in range(      bits): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, wd_in_w{ct+1}{i}, 0, 0, notifier);\n'
+      for i in range(      bits): setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, w_mask_w{ct+1}{i}, 0, 0, notifier);\n'
+   else:           # per-sig
+      setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, addr_w{ct+1}, 0, 0, notifier);\n'
+      setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, wd_in_w{ct+1}, 0, 0, notifier);\n'
+      setuphold_checks += f'      $setuphold (posedge clk{clk_suff}, w_mask_w{ct+1}, 0, 0, notifier);\n'
   #################################################
   ###   END Generate 'setuphold' timing checks  ###
   #################################################
