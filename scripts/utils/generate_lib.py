@@ -36,8 +36,7 @@ def generate_lib( mem ):
     num_rport                 = int(mem.r_ports)
     num_wport                 = int(mem.w_ports)
     rw_clks, r_clks, w_clks   = mem.port_clks
-    clk_list                  = list(set(val for subarr in mem.port_clks for val in subarr))
-    #one_clk                   = 1 if ()
+
     write_mode                = str(mem.write_mode)
     byte_write                = 1 if int(mem.write_granularity) == 8 else 0
     # Number of bits for address

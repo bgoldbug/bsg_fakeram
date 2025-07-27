@@ -368,7 +368,7 @@ module {name} (
    
    
    always @(posedge clk1) begin
-      if (!ce_r1) begin  // Active low chip select
+      if (ce_r1) begin  // Active low chip select
          rd_out_r1 <= mem[addr_r1];
       end
    end
