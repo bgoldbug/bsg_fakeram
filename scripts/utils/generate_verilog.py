@@ -100,17 +100,13 @@ def generate_verilog(mem, tmChkExpand=False):
       MEM_CONFIG["start_of_rw_p1"] = generate_start_mode_priority(write_mode, "rd_out_r1", "addr_r1", "ce_r1")
       MEM_CONFIG["end_of_rw_p1"] = generate_end_mode_priority(write_mode, "rd_out_r1", "addr_r1", "ce_r1")
       MEM_CONFIG["byte_write_logic"] = generate_byte_write_logic(byte_write, bits // 8, 'w1')
-   elif mem.port_config == "1rw":
-      MEM_CONFIG["start_of_rw_p1"] = generate_start_mode_priority(write_mode, "rd_out_rw1", "addr_rw1")
-      MEM_CONFIG["end_of_rw_p1"] = generate_end_mode_priority(write_mode, "rd_out_rw1", "addr_rw1")
-      MEM_CONFIG["byte_write_logic"] = generate_byte_write_logic(byte_write, bits // 8, 'rw1')
    elif mem.port_config == "2r1w":
       MEM_CONFIG["start_of_rw_p1"] = generate_start_mode_priority(write_mode, "rd_out_r1", "addr_r1", "ce_r1")
       MEM_CONFIG["end_of_rw_p1"] = generate_end_mode_priority(write_mode, "rd_out_r1", "addr_r1", "ce_r1")
       MEM_CONFIG["start_of_rw_p2"] = generate_start_mode_priority(write_mode, "rd_out_r2", "addr_r2", "ce_r2")
       MEM_CONFIG["end_of_rw_p2"] = generate_end_mode_priority(write_mode, "rd_out_r2", "addr_r2", "ce_r2")
       MEM_CONFIG["byte_write_logic"] = generate_byte_write_logic(byte_write, bits // 8, 'w1')
-   elif mem.port_config == "1rw1r":
+   elif mem.port_config == "1rw1r" or mem.port_config == "1rw":
       MEM_CONFIG["start_of_rw_p1"] = generate_start_mode_priority(write_mode, "rd_out_rw1", "addr_rw1")
       MEM_CONFIG["end_of_rw_p1"] = generate_end_mode_priority(write_mode, "rd_out_rw1", "addr_rw1")
       MEM_CONFIG["byte_write_logic"] = generate_byte_write_logic(byte_write, bits // 8, 'rw1')

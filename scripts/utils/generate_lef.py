@@ -36,12 +36,11 @@ def generate_lef( mem ):
     # Offset from bottom edge to first pin
     x_offset = 10 * min_pin_pitch   ;# arbitrary offset (looks decent)
     y_offset = 10 * min_pin_pitch   ;# arbitrary offset (looks decent)
-
     #########################################
     # Calculate the pin spacing (pitch)
     #########################################
 
-    number_of_pins = num_wport*3*bits + num_rwport*3*bits + num_rport*3*bits + (num_rport + num_rwport + num_wport) * (addr_width + 3)
+    number_of_pins = num_wport*2*bits + num_rwport*3*bits + num_rport*2*bits + (num_wport + num_rwport + num_rport) * (addr_width + 3)
     number_of_tracks_available = math.floor((h - 2*y_offset) / min_pin_pitch)
     number_of_spare_tracks = number_of_tracks_available - number_of_pins
 
@@ -58,7 +57,7 @@ def generate_lef( mem ):
     track_count -= 1
 
     pin_pitch = min_pin_pitch * track_count
-    group_pitch = math.floor((num_rport + num_rwport + num_wport) * (number_of_tracks_available - number_of_pins*track_count) / 4)*mem.process.pinPitch_um 
+    group_pitch = math.floor((number_of_tracks_available - number_of_pins*track_count) /  4)*mem.process.pinPitch_um 
 
     #########################################
     # LEF HEADER
@@ -122,19 +121,16 @@ def generate_lef( mem ):
             y_step = lef_add_pin( fid, mem, f'addr_r{ct+1}[{i}]', True, y_step, pin_pitch )
         y_step += group_pitch-pin_pitch
 
-
     for ct in range(num_rwport) :
         y_step = lef_add_pin( fid, mem, f'we_in_rw{ct+1}', True, y_step, pin_pitch )
     for ct in range(num_wport) :
         y_step = lef_add_pin( fid, mem, f'we_in_w{ct+1}', True, y_step, pin_pitch )
-    y_step += group_pitch-pin_pitch
     for ct in range(num_rwport) :
         y_step = lef_add_pin( fid, mem, f'ce_rw{ct+1}', True, y_step, pin_pitch)
     for ct in range(num_wport):
         y_step = lef_add_pin( fid, mem, f'ce_w{ct+1}', True, y_step, pin_pitch )
     for ct in range(num_rport):
         y_step = lef_add_pin( fid, mem, f'ce_r{ct+1}', True, y_step, pin_pitch )  
-    y_step += group_pitch-pin_pitch
     for i in unique_clks:
         num = '' if (len(unique_clks) == 1) else i
         y_step = lef_add_pin( fid, mem, f'clk{num}', True, y_step, pin_pitch )
@@ -254,17 +250,14 @@ def generate_lef( mem ):
             fid.write('    RECT 0 %.3f %.3f %.3f ;\n' % (prev_y,pin_height,y_step-min_pin_width/2))
             prev_y = y_step+min_pin_width/2
             y_step += pin_pitch
-        y_step += group_pitch-pin_pitch
         for ct in range(num_rwport + num_rport + num_wport): # ce_rw & ce_r & ce_w
             fid.write('    RECT 0 %.3f %.3f %.3f ;\n' % (prev_y,pin_height,y_step-min_pin_width/2))
             prev_y = y_step+min_pin_width/2
             y_step += pin_pitch
-        y_step += group_pitch-pin_pitch
         for ct in range(len(unique_clks)): # Single clk by default but handling for multiple clk pins
             fid.write('    RECT 0 %.3f %.3f %.3f ;\n' % (prev_y,pin_height,y_step-min_pin_width/2))
             prev_y = y_step+min_pin_width/2
             y_step += pin_pitch
-        y_step += group_pitch-pin_pitch
         # Final shapre from top of last pin to top edge
         fid.write('    RECT 0 %.3f %.3f %.3f ;\n' % (prev_y,pin_height,h))
 
@@ -351,23 +344,21 @@ def generate_lef( mem ):
             fid.write('    RECT 0 %.3f %.3f %.3f ;\n' % (prev_y,pin_height,y_step-min_pin_width/2))
             prev_y = y_step+min_pin_width/2
             y_step += pin_pitch
-        y_step += group_pitch-pin_pitch
         for ct in range(num_rwport + num_rport + num_wport): # ce_rw & ce_r & ce_w
             fid.write('    RECT 0 %.3f %.3f %.3f ;\n' % (prev_y,pin_height,y_step-min_pin_width/2))
             prev_y = y_step+min_pin_width/2
             y_step += pin_pitch
-        y_step += group_pitch-pin_pitch
         for ct in range(len(unique_clks)): # Single clk by default but handling for multiple clk pins
             fid.write('    RECT 0 %.3f %.3f %.3f ;\n' % (prev_y,pin_height,y_step-min_pin_width/2))
             prev_y = y_step+min_pin_width/2
             y_step += pin_pitch
-        y_step += group_pitch-pin_pitch
         # Final shapre from top of last pin to top edge
         fid.write('    RECT 0 %.3f %.3f %.3f ;\n' % (prev_y,min_pin_width,h))
 
     # Overlap layer (full rect)
-    fid.write('    LAYER OVERLAP ;\n')
-    fid.write('    RECT 0 0 %.3f %.3f ;\n' % (w,h))
+    if (mem.process.tech_nm != 7):
+        fid.write('    LAYER OVERLAP ;\n')
+        fid.write('    RECT 0 0 %.3f %.3f ;\n' % (w,h))
 
     # Finish up LEF file
     fid.write('  END\n')

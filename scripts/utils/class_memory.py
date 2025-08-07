@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 from utils.cacti_config import cacti_config
-
+from utils.area import get_macro_dimensions
 ################################################################################
 # MEMORY CLASS
 #
@@ -74,30 +74,37 @@ class Memory:
       self.results_dir = os.sep.join([os.getcwd(), 'results', self.name])
     if not os.path.exists( self.results_dir ):
       os.makedirs( self.results_dir )
-    if cacti_dir:
-      self.cacti_dir = cacti_dir
-    else:
-      self.cacti_dir = os.environ['CACTI_BUILD_DIR']
-    self.__run_cacti()
-    with open( os.sep.join([self.results_dir, 'cacti.cfg.out']), 'r' ) as fid:
-      lines = [line for line in fid]
+  
+    if (process.tech_nm == 7):
+      self.tech_node_nm                = 7 
+      self.associativity               = 1 
+      self.access_time_ns = 0.2183
+      self.cycle_time_ns = 0.1566
+      self.standby_leakage_per_bank_mW =  0.1289
+      self.fo4_ps = 9.0632
+      self.height_um, self.width_um    = get_macro_dimensions(process, sram_data)
+      self.pin_dynamic_power_mW = 0.0013449
+    else: 
+      if cacti_dir:
+        self.cacti_dir = cacti_dir
+      else:
+        self.cacti_dir = os.environ['CACTI_BUILD_DIR']
+      self.__run_cacti()
+      with open( os.sep.join([self.results_dir, 'cacti.cfg.out']), 'r' ) as fid:
+        lines = [line for line in fid]
       cacti_data = lines[-1].split(',')
-
-    self.tech_node_nm                = int(cacti_data[0])
-    self.capacity_bytes              = int(cacti_data[1])
-    self.associativity               = int(cacti_data[2])
-    self.output_width_bits           = int(cacti_data[3])
-    self.access_time_ns              = float(cacti_data[4])
-    self.cycle_time_ns               = float(cacti_data[5])
-    #self.dyn_search_energy_nj        = float(cacti_data[6])
-    self.dyn_read_energy_nj          = float(cacti_data[7])
-    self.dyn_write_energy_nj         = float(cacti_data[8])
-    self.standby_leakage_per_bank_mW = float(cacti_data[9])
-    self.area_mm2                    = float(cacti_data[10])
-    self.fo4_ps                      = float(cacti_data[11])
-    self.width_um                    = float(cacti_data[12])
-    self.height_um                   = float(cacti_data[13])
-
+      self.tech_node_nm                = int(cacti_data[0])
+      self.capacity_bytes              = int(cacti_data[1])
+      self.associativity               = int(cacti_data[2])
+      self.access_time_ns              = float(cacti_data[4])
+      self.cycle_time_ns               = float(cacti_data[5])
+      self.pin_dynamic_power_mW        = float(cacti_data[8])
+      self.standby_leakage_per_bank_mW = float(cacti_data[9])
+      self.fo4_ps                      = float(cacti_data[11])
+      self.width_um                    = float(cacti_data[12])
+      self.height_um                   = float(cacti_data[13])
+      
+    
     self.cap_input_pf = 0.005
 
     self.tech_node_um = self.tech_node_nm / 1000.0
@@ -112,7 +119,7 @@ class Memory:
     self.area_um2 = self.width_um * self.height_um
 
     #self.pin_dynamic_power_mW = (0.5 * self.cap_input_pf * (float(self.process.voltage)**2))*1e9 ;# P = 0.5*CV^2
-    self.pin_dynamic_power_mW = self.dyn_write_energy_nj
+    
 
     self.t_setup_ns = 0.050  ;# arbitrary 50ps setup
     self.t_hold_ns  = 0.050  ;# arbitrary 50ps hold
