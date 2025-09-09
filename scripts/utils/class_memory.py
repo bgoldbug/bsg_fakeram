@@ -24,35 +24,12 @@ class Memory:
     self.depth          = int(sram_data['depth'])
     self.num_banks      = int(sram_data['banks'])
     self.cache_type     = str(sram_data['type']) if 'type' in sram_data else 'cache'
-    
+    self.has_wmask      = False if str(sram_data['no_wmask']) == 'true' else True
     # Port configuration - default to 1RW if not specified
-    self.port_config    = str(sram_data.get('ports', '1rw'))
     
-    # Handle different port configurations
-    if self.port_config == '1rw1r':
-      self.rw_ports = 1
-      self.r_ports = 1
-      self.w_ports = 0
-    elif self.port_config == '1r1rw':
-      self.rw_ports = 1
-      self.r_ports = 1
-      self.w_ports = 0
-    elif self.port_config == '1r1w':
-      self.rw_ports = 0
-      self.r_ports = 1
-      self.w_ports = 1
-    elif self.port_config == '2r1w':
-      self.rw_ports = 0
-      self.r_ports = 2
-      self.w_ports = 1
-    elif self.port_config == '1rw1r':
-      self.rw_ports = 1
-      self.r_ports = 1
-      self.w_ports = 0
-    else: # 1rw
-      self.rw_ports = 1
-      self.r_ports = 0
-      self.w_ports = 0
+    self.r_ports                            = int(sram_data['ports'].get('r', 0))
+    self.w_ports                            = int(sram_data['ports'].get('w', 0))
+    self.rw_ports                           = int(sram_data['ports'].get('rw', 0))
     
     # Write granularity (default to bit-level if not specified)
     self.write_granularity = int(sram_data.get('write_granularity', 1))
@@ -62,9 +39,6 @@ class Memory:
     self.write_mode    = str(sram_data.get('write_mode', 'write_first'))
 
     # clk_ct array contains the amount of clks for rw, r, and w ports respectively
-    self.port_clks = [ list(map(int, re.findall(r'-?\d+', clk_grp))) for clk_grp in re.findall(r'\[[^\]]*\]|(?<=,)\s*(?=,|$)|^\s*(?=,|$)', 
-                        sram_data.get('port_clks', '[1], [0], [0]').strip())]
-    print(self.port_clks)
     self.width_in_bytes = math.ceil(self.width_in_bits / 8.0)
     self.total_size     = self.width_in_bytes * self.depth
     if output_dir: # Output dir was set by command line option
@@ -110,7 +84,7 @@ class Memory:
     self.tech_node_um = self.tech_node_nm / 1000.0
 
     print(f'Original {self.name} size = {self.width_um} x {self.height_um}')
-    print(f'Port configuration: {self.port_config}')
+    # print(f'Port configuration: {self.port_config}')
     print(f'Write granularity: {self.write_granularity} bits')
     
     # Adjust to snap
