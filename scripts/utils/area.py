@@ -24,10 +24,12 @@ def get_macro_dimensions(process, sram_data):
   elif num_banks != 1:
     raise Exception("Unsupported number of banks: {}".format(num_banks))
 
+
   all_bitcell_height = all_bitcell_height / column_mux_factor
   all_bitcell_width = all_bitcell_width * column_mux_factor
 
-  total_height = all_bitcell_height * 1.2
+  total_height = (all_bitcell_height * 1.2 * (1.5 if not sram_data['no_wmask'] else 1))
   total_width = all_bitcell_width * 1.2
-
+  total_width = total_width if total_width >= 1 else (all_bitcell_width * 12) 
+  total_height = total_height if total_height >= 1 else (all_bitcell_height * 12)
   return total_height, total_width

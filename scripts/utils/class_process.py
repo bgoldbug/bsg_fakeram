@@ -18,25 +18,27 @@ class Process:
     self.metalPrefix    = str(json_data['metalPrefix'])
     self.voltage        = str(json_data['voltage'])
     if ('pinPitch_nm' in json_data):
-      self.LRpitch_um     = self.TBpitch_um   = int(json_data['pinPitch_nm']) / 1000.0
+      self.LRpitch_um     = self.TBpitch_um  = self.PSpitch_um = int(json_data['pinPitch_nm']) / 1000.0
     else:
       self.TBpitch_um = int(json_data['TBpinPitch_nm']) / 1000.0
       self.LRpitch_um = int(json_data['LRpinPitch_nm']) / 1000.0
-    if ('pinHeight_nm' in json_data):
-      self.LRheight_um    = self.TBheight_um  = int(json_data['pinHeight_nm']) / 1000.0 if 'pinHeight_nm' in json_data else int(json_data['pinPitch_nm']) / 1000.0
-    else:
-      self.TBheight_um   = int(json_data['TBpinHeight_nm']) / 1000.0 if 'TBpinHeight_nm' in json_data else (self.TBwidth_um)
-      self.LRheight_um   = int(json_data['LRpinHeight_nm']) / 1000.0 if 'LRpinHeight_nm' in json_data else (self.LRwidth_um)
+      self.PSpitch_um = int(json_data['LRpinPitch_nm']) / 1000.0 if 'PSpinPitch_nm' not in json_data else int(json_data['PSpinPitch_nm']) / 1000.0
     if ('pinWidth_nm' in json_data):
-      self.TBwidth_um     = self.LRwidth_um   = int(json_data['pinWidth_nm']) / 1000.0
+      self.TBwidth_um     = self.LRwidth_um = self.PSwidth_um  = int(json_data['pinWidth_nm']) / 1000.0
     else:
       self.TBwidth_um = int(json_data['TBpinWidth_nm']) / 1000.0
-      self.LRwidth_um = int(json_data['LRpinWidth_nm']) / 1000.0
+      self.LRwidth_um = int(json_data['LRpinWidth_nm']) / 1000.0 
+      self.PSwidth_um = int(json_data['LRpinWidth_nm']) / 1000.0 if 'PSpinWidth_nm' not in json_data else int(json_data['PSpinWidth_nm']) / 1000.0 
+    if ('pinHeight_nm' in json_data):
+      self.LRheight_um    = self.TBheight_um  = int(json_data['pinPitch_nm']) / 1000.0 if 'pinHeight_nm' not in json_data else int(json_data['pinHeight_nm']) / 1000.0
+    else:
+      self.TBheight_um   = self.TBwidth_um if 'TBpinHeight_nm' not in json_data else int(json_data['TBpinHeight_nm']) / 1000.0
+      self.LRheight_um   = self.LRwidth_um if 'LRpinHeight_nm' not in json_data else int(json_data['LRpinHeight_nm']) / 1000.0
+    
 
     if (self.tech_nm == 7):
       # Required from JSON if tech nm is 7
       self.fin_pitch_nm = int(json_data['fin_pitch_nm'])
-      self.metal_track_pitch_nm =  int(json_data['metal_track_pitch_nm'])
       self.contacted_poly_pitch_nm = int(json_data['contacted_poly_pitch_nm'])
       self.column_mux_factor = int(json_data['column_mux_factor'])
       
