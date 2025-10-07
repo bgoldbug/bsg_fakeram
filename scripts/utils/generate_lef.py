@@ -29,13 +29,13 @@ def generate_lef( mem ):
     # Memory parameters
     name        = mem.name
     depth       = mem.depth
-    bits        = mem.width_in_bits
+    bits        = int(mem.width_in_bits)
     w           = mem.width_um
     h           = mem.height_um
     num_rwport  = mem.rw_ports
     num_wport   = mem.w_ports
     num_rport   = mem.r_ports
-    addr_width  = math.ceil(math.log2(mem.depth))
+    addr_width  = int(math.ceil(math.log2(mem.depth)))
 
     # Process parameters
     supply_pin_width = mem.process.PSwidth_um*4
@@ -50,8 +50,8 @@ def generate_lef( mem ):
     pin_tb_height  = mem.process.TBheight_um
     min_tb_pitch   = mem.process.TBpitch_um 
 
-    y_offset = 2 * min_lr_pitch   ;# arbitrary offset (looks decent)
-    x_offset = 2 * min_tb_pitch; 
+    y_offset = 6 * min_lr_pitch # arbitrary offset (looks decent)
+    x_offset = 6 * min_tb_pitch 
 
     metalPrefix    = mem.process.metalPrefix
     flip           = mem.process.flipPins.lower() == 'true'
@@ -68,7 +68,7 @@ def generate_lef( mem ):
     number_of_horizontal_tracks_available = math.floor((w - 2*x_offset) / min_tb_pitch)
     print(f'Number of horizontal tracks available: {number_of_horizontal_tracks_available}')
     print(f'Height is {h}, width is {w}')
-    number_of_left_pins = math.ceil(((num_wport + num_rwport) * 2 if mem.has_wmask else 1  * bits)/2)
+    number_of_left_pins = math.ceil(((num_wport + num_rwport) * (2 if mem.has_wmask else 1)  * bits) / 4) + math.ceil((num_rport + num_wport) * addr_width / 2)
     number_of_spare_left_tracks = number_of_vertical_tracks_available - number_of_left_pins
     print(f'Number of spare left tracks: {number_of_spare_left_tracks}')
     left_track_count = count_tracks(number_of_spare_left_tracks, number_of_vertical_tracks_available, number_of_left_pins)
@@ -76,7 +76,7 @@ def generate_lef( mem ):
     left_group_pitch = math.floor((number_of_vertical_tracks_available - number_of_left_pins*left_track_count) / 2)*mem.process.LRpitch_um 
     print(f"Left track_count complete. pitch is {left_group_pitch}")
 
-    number_of_right_pins = (num_wport + num_rwport) * addr_width + (num_wport + num_rwport) * 3 + math.ceil((num_wport + num_rwport) * (2 if mem.has_wmask else 1) * bits / 2)  
+    number_of_right_pins =  + math.ceil(((num_wport + num_rwport) * (2 if mem.has_wmask else 1) * bits) / 4)  + math.ceil((num_rport + num_wport) * addr_width / 2)
     number_of_spare_right_tracks = number_of_vertical_tracks_available - number_of_right_pins
     print(f'Number of spare right tracks: {number_of_spare_right_tracks}')
     right_track_count = count_tracks(number_of_spare_right_tracks, number_of_vertical_tracks_available, number_of_right_pins)
@@ -84,7 +84,7 @@ def generate_lef( mem ):
     right_group_pitch = math.floor((number_of_vertical_tracks_available - number_of_right_pins*right_track_count) / 2)*mem.process.LRpitch_um 
     print(f"Right track_count complete. pitch is {right_group_pitch}")
 
-    number_of_top_pins = math.ceil((num_rport + num_rwport) * bits / 2) + math.ceil(num_rport * addr_width / 2) + num_rport * 2
+    number_of_top_pins = math.ceil((num_rport + num_rwport) * bits / 2) + num_rport * 2 + (num_wport + num_rwport) * 3 + math.ceil(((num_wport + num_rwport) * (1 if mem.has_wmask else 0)  * bits)/2)
     number_of_spare_top_tracks = number_of_horizontal_tracks_available - number_of_top_pins
     print(f'Number of spare top tracks: {number_of_spare_top_tracks}')
     top_track_count = count_tracks(number_of_spare_top_tracks, number_of_horizontal_tracks_available, number_of_top_pins)
@@ -92,7 +92,7 @@ def generate_lef( mem ):
     top_group_pitch = math.floor((number_of_horizontal_tracks_available - number_of_top_pins*top_track_count) / 2)*mem.process.TBpitch_um 
     print(f"Top track_count complete. pitch is {top_group_pitch}")
 
-    number_of_bottom_pins = math.ceil((num_rport + num_rwport) * bits / 2) + math.ceil(num_rport * addr_width / 2)
+    number_of_bottom_pins = math.ceil((num_rport + num_rwport) * bits / 2)  +  math.ceil((num_wport + num_rwport) * bits / 2)
     number_of_spare_bottom_tracks = number_of_horizontal_tracks_available - number_of_bottom_pins
     print(f'Number of spare bottom tracks: {number_of_spare_bottom_tracks}')
     print(f'Number of bottom pins: {number_of_bottom_pins}')
@@ -126,88 +126,79 @@ def generate_lef( mem ):
     x_bottom_step = x_offset
     if (mem.has_wmask):
         for ct in range(num_rwport) :
-            for i in range(math.ceil(int(bits)/2)):
-                y_left_step = lef_add_pin( fid, mem, f'rw{ct}_mask_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
-            y_left_step += left_group_pitch-left_pin_pitch
-            for i in range(math.ceil(int(bits)/2), int(bits)):
+            for i in range(math.ceil(bits/4)):
+                y_left_step  = lef_add_pin( fid, mem, f'rw{ct}_mask_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
+            for i in range(math.ceil(bits/4), math.ceil(bits/2)):
                 y_right_step = lef_add_pin( fid, mem, f'rw{ct}_mask_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
-            if math.ceil(int(bits)/2) != int(bits):
-                y_right_step += right_group_pitch-right_pin_pitch
-        
+            for i in range(math.ceil(bits/2), bits):
+                x_top_step   = lef_add_pin( fid, mem, f'rw{ct}_mask_in[{i}]', True, 'T', x_top_step, top_pin_pitch )
+            
         for ct in range(num_wport) :
-            for i in range(math.ceil(int(bits)/2)):
-                y_left_step = lef_add_pin( fid, mem, f'w{ct}_mask_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
-            y_left_step += left_group_pitch-left_pin_pitch
-            for i in range(math.ceil(int(bits)/2), int(bits)):
+            for i in range(math.ceil(bits/4)):
+                y_left_step  = lef_add_pin( fid, mem, f'w{ct}_mask_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
+            for i in range(math.ceil(bits/4), math.ceil(bits/2)):
                 y_right_step = lef_add_pin( fid, mem, f'w{ct}_mask_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
-            if math.ceil(int(bits)/2) != int(bits):
-                y_right_step += right_group_pitch-right_pin_pitch
+            for i in range(math.ceil(bits/2), bits):
+                x_top_step   = lef_add_pin( fid, mem, f'w{ct}_mask_in[{i}]', True, 'T', x_top_step, top_pin_pitch )
+           
     
     for ct in range(num_rwport) :
-        for i in range(math.ceil(int(bits)/2)):
-            y_left_step = lef_add_pin( fid, mem, f'rw{ct}_wd_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
-        y_left_step += left_group_pitch-left_pin_pitch
-        for i in range(math.ceil(int(bits)/2), int(bits)):
-            y_right_step = lef_add_pin( fid, mem, f'rw{ct}_wd_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
-        if math.ceil(int(bits)/2) != int(bits):
-            y_right_step += right_group_pitch-right_pin_pitch
+        for i in range(math.ceil(bits/4)):
+            y_left_step   = lef_add_pin( fid, mem, f'rw{ct}_wd_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
+        for i in range(math.ceil(bits/4), math.ceil(bits/2)):
+            y_right_step  = lef_add_pin( fid, mem, f'rw{ct}_wd_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
+        for i in range(math.ceil(bits/2), bits):
+            x_bottom_step = lef_add_pin( fid, mem, f'rw{ct}_wd_in[{i}]', False, 'B', x_bottom_step, bottom_pin_pitch )
+      
 
     for ct in range(num_wport) :
-        for i in range(math.ceil(int(bits)/2)):
-            y_left_step = lef_add_pin( fid, mem, f'w{ct}_wd_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
-        y_left_step += left_group_pitch-left_pin_pitch
-        for i in range(math.ceil(int(bits)/2), int(bits)):
-            y_right_step = lef_add_pin( fid, mem, f'w{ct}_wd_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
-        if math.ceil(int(bits)/2) != int(bits):
-            y_right_step += right_group_pitch-right_pin_pitch
+        for i in range(math.ceil(bits/4)):
+            y_left_step   = lef_add_pin( fid, mem, f'w{ct}_wd_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
+        for i in range(math.ceil(bits/4), math.ceil(bits/2)):
+            y_right_step  = lef_add_pin( fid, mem, f'w{ct}_wd_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
+        for i in range(math.ceil(bits/2), bits):
+            x_bottom_step = lef_add_pin( fid, mem, f'w{ct}_wd_in[{i}]', False, 'B', x_bottom_step, bottom_pin_pitch )
+        
         
     for ct in range(num_rwport) :
-        for i in range(math.ceil(int(bits)/2)) :
+        for i in range(math.ceil(bits/2)) :
             x_bottom_step = lef_add_pin( fid, mem, f'rw{ct}_rd_out[{i}]', False, 'B', x_bottom_step, bottom_pin_pitch )
-        x_bottom_step += bottom_group_pitch-bottom_pin_pitch
-        for i in range(math.ceil(int(bits)/2), int(bits)):
+        for i in range(math.ceil(bits/2), bits):
             x_top_step = lef_add_pin( fid, mem, f'rw{ct}_rd_out[{i}]', False, 'T', x_top_step, top_pin_pitch )
-        if math.ceil(int(bits)/2) != int(bits):
-            x_top_step += top_group_pitch-top_pin_pitch
-
+       
     for ct in range(num_rport):
-        for i in range(math.ceil(int(bits)/2)) :
+        for i in range(math.ceil(bits/2)) :
             x_bottom_step = lef_add_pin( fid, mem, f'r{ct}_rd_out[{i}]', False, 'B', x_bottom_step, bottom_pin_pitch )
-        x_bottom_step += bottom_group_pitch-bottom_pin_pitch
-        for i in range(math.ceil(int(bits)/2), int(bits)):
+        for i in range(math.ceil(bits/2), bits):
             x_top_step = lef_add_pin( fid, mem, f'r{ct}_rd_out[{i}]', False, 'T', x_top_step, top_pin_pitch )
-        if math.ceil(int(bits)/2) != int(bits):
-            x_top_step += top_group_pitch-top_pin_pitch
-    
-    
 
     for ct in range(num_rwport) :
-        for i in range(int(addr_width)) :
+        for i in range(math.ceil(addr_width/2)) :
+            y_left_step  = lef_add_pin( fid, mem, f'rw{ct}_addr_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
+        for i in range(math.ceil(addr_width/2), addr_width):
             y_right_step = lef_add_pin( fid, mem, f'rw{ct}_addr_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
-        y_right_step += right_group_pitch-right_pin_pitch
 
     for ct in range(num_wport) :
-        for i in range(int(addr_width)) :
+        for i in range(math.ceil(addr_width/2)) :
+            y_left_step  = lef_add_pin( fid, mem, f'w{ct}_addr_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
+        for i in range(math.ceil(addr_width/2), addr_width):
             y_right_step = lef_add_pin( fid, mem, f'w{ct}_addr_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
-        y_right_step += right_group_pitch-right_pin_pitch
-
+        
     for ct in range(num_rport) :
-        for i in range(math.ceil(int(addr_width)/2)) :
-            x_top_step = lef_add_pin( fid, mem, f'r{ct}_addr_in[{i}]', True, 'T', x_top_step, top_pin_pitch )
-        x_top_step += top_group_pitch-top_pin_pitch
-        for i in range(math.ceil(int(addr_width)/2), int(addr_width)):
-            x_bottom_step = lef_add_pin( fid, mem, f'r{ct}_addr_in[{i}]', True, 'B', x_bottom_step, bottom_pin_pitch )
-        if math.ceil(int(addr_width)/2) != int(addr_width):
-            x_bottom_step += bottom_group_pitch-bottom_pin_pitch
+        for i in range(math.ceil(addr_width/2)) :
+            y_left_step  = lef_add_pin( fid, mem, f'r{ct}_addr_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
+        for i in range(math.ceil(addr_width/2), addr_width):
+            y_right_step = lef_add_pin( fid, mem, f'r{ct}_addr_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
+        
     # Clock and control pins
     for ct in range(num_rwport) :
-        y_right_step = lef_add_pin( fid, mem, f'rw{ct}_we_in', True, 'R', y_right_step, right_pin_pitch )
-        y_right_step = lef_add_pin( fid, mem, f'rw{ct}_ce_in', True, 'R', y_right_step, right_pin_pitch)
-        y_right_step = lef_add_pin( fid, mem, f'rw{ct}_clk', True, 'R', y_right_step, right_pin_pitch)
+        x_top_step = lef_add_pin( fid, mem, f'rw{ct}_we_in', True, 'T', x_top_step, top_pin_pitch )
+        x_top_step = lef_add_pin( fid, mem, f'rw{ct}_ce_in', True, 'T', x_top_step, top_pin_pitch)
+        x_top_step = lef_add_pin( fid, mem, f'rw{ct}_clk', True, 'T', x_top_step, top_pin_pitch)
     for ct in range(num_wport) :
-        y_right_step = lef_add_pin( fid, mem, f'w{ct}_we_in', True, 'R', y_right_step, right_pin_pitch )
-        y_right_step = lef_add_pin( fid, mem, f'w{ct}_ce_in', True, 'R', y_right_step, right_pin_pitch )
-        y_right_step = lef_add_pin( fid, mem, f'w{ct}_clk', True, 'R', y_right_step, right_pin_pitch)
+        x_top_step = lef_add_pin( fid, mem, f'w{ct}_we_in', True, 'T', x_top_step, top_pin_pitch )
+        x_top_step = lef_add_pin( fid, mem, f'w{ct}_ce_in', True, 'T', x_top_step, top_pin_pitch )
+        x_top_step = lef_add_pin( fid, mem, f'w{ct}_clk', True, 'T', x_top_step, top_pin_pitch)
     for ct in range(num_rport):
         x_top_step = lef_add_pin( fid, mem, f'r{ct}_ce_in', True, 'T', x_top_step, top_pin_pitch )  
         x_top_step = lef_add_pin( fid, mem, f'r{ct}_clk', True, 'T', x_top_step, top_pin_pitch)
@@ -226,7 +217,7 @@ def generate_lef( mem ):
     fid.write('    USE GROUND ;\n')
     fid.write('    PORT\n')
     fid.write('      LAYER %s ;\n' % supply_pin_layer)
-    ps_x_offset = 2 * min_tb_pitch
+    ps_x_offset = 3 * min_tb_pitch
     ps_y_offset = 5 * min_lr_pitch
     if flip: # Vertical straps
         ps_x_step = ps_x_offset
@@ -288,16 +279,7 @@ def generate_lef( mem ):
 
     fid.write('    LAYER %s3 ;\n' % metalPrefix)
     fid.write('    RECT 0 0 %.3f %.3f ;\n' % (w,h))
-    # # Flipped therefore pins on M3
-    # if flip:
 
-    #     # Rect from top to bottom, just right of pins to right edge
-    #     fid.write('    RECT 0 0 %.3f %.3f ;\n' % (w,h))
-
-
-    # # Not flipped therefore no pins on M3 (Full rect)
-    # else:
-    #     fid.write('    RECT 0 0 %.3f %.3f ;\n' % (w,h))
 
     ################
     # Layer 4
@@ -305,23 +287,6 @@ def generate_lef( mem ):
 
     fid.write('    LAYER %s4 ;\n' % metalPrefix)
     fid.write('    RECT 0 0 %.3f %.3f ;\n' % (w,h))
-    # # Flipped therefore only vertical pg straps
-    # if flip:
-
-    #     # Block under and above the vertical power straps (full width)
-    #     fid.write('    RECT 0 0 %.3f %.3f ;\n' % (w, y_offset))
-    #     fid.write('    RECT 0 %.3f %.3f %.3f ;\n' % (h-y_offset,w,h))
-
-    # # Not flipped therefore pins on M4 and horizontal pg straps
-    # else:
-
-    #     # Block from right of pins to left of straps and a block to the right
-    #     # of the straps (full height)
-    #     fid.write('    RECT %.3f 0 %.3f %.3f ;\n' % (min_lr_width, x_offset, h))
-    #     fid.write('    RECT %.3f 0 %.3f %.3f ;\n' % (w-x_offset, w, h))
-
-
-       
 
     # Overlap layer (full rect)
     if (mem.process.tech_nm == 45):
