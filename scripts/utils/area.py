@@ -31,6 +31,6 @@ def get_macro_dimensions(process, sram_data):
   total_width = all_bitcell_width * 1.2
 
   # Dimensions need to be at least 5.184 otherwise PDN will cause error
-  total_width = max(5.184, total_width)
-  total_height = max(5.184, total_height)
+  total_width = max(6.221, total_width)
+  total_height = max(6.221, total_height)
   return total_height, total_width
