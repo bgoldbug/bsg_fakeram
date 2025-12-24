@@ -217,16 +217,16 @@ def generate_lef( mem ):
     fid.write('    USE GROUND ;\n')
     fid.write('    PORT\n')
     fid.write('      LAYER %s ;\n' % supply_pin_layer)
-    ps_x_offset = 3 * min_tb_pitch
-    ps_y_offset = 5 * min_lr_pitch
+    ps_x_offset = 6 * min_tb_pitch
+    ps_y_offset = 6 * min_lr_pitch
     if flip: # Vertical straps
         ps_x_step = ps_x_offset
-        while ps_x_step <= w - ps_x_offset:
+        while ps_x_step <= w - min_tb_pitch:
             fid.write('      RECT %.3f %.3f %.3f %.3f ;\n' % (ps_x_step-supply_pin_half_width, ps_y_offset, ps_x_step+supply_pin_half_width, h-ps_y_offset))
             ps_x_step += supply_pin_pitch*2
     else:  # Horizontal straps
         ps_y_step = ps_y_offset
-        while ps_y_step <= h - ps_y_offset:
+        while ps_y_step <= h - min_lr_pitch:
             fid.write('      RECT %.3f %.3f %.3f %.3f ;\n' % (ps_x_offset, ps_y_step-supply_pin_half_width, w-ps_x_offset, ps_y_step+supply_pin_half_width))
             ps_y_step += supply_pin_pitch*2
     fid.write('    END\n')
@@ -239,12 +239,12 @@ def generate_lef( mem ):
     fid.write('      LAYER %s ;\n' % supply_pin_layer)
     if flip:  # Vertical straps
         ps_x_step = ps_x_offset
-        while ps_x_step <= w - ps_x_offset:
+        while ps_x_step <= w - min_tb_pitch:
             fid.write('      RECT %.3f %.3f %.3f %.3f ;\n' % (ps_x_step-supply_pin_half_width, ps_y_offset, ps_x_step+supply_pin_half_width, h-ps_y_offset))
             ps_x_step += supply_pin_pitch*2
     else:  # Horizontal straps
         ps_y_step = ps_y_offset
-        while ps_y_step <= h - ps_y_offset:
+        while ps_y_step <= h - min_lr_pitch:
             fid.write('      RECT %.3f %.3f %.3f %.3f ;\n' % (ps_x_offset, ps_y_step-supply_pin_half_width, w-ps_x_offset, ps_y_step+supply_pin_half_width))
             ps_y_step += supply_pin_pitch*2
     fid.write('    END\n')
