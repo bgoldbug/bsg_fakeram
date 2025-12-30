@@ -57,18 +57,18 @@ def generate_lef( mem ):
     flip           = mem.process.flipPins.lower() == 'true'
     pin_height = mem.process.LRheight_um
     supply_pin_layer = '%s4' % metalPrefix
-    # Offset from bottom edge to first pin
-    # Offset from bottom edge to first pin
     
     #########################################
-    # Calculate the pin spacing (pitch)
+    # Calculate pin spacing (pitch) AND split pins around the four sides of the macro.
     #########################################
+    
     number_of_vertical_tracks_available = math.floor((h - 2*y_offset) / min_lr_pitch)
     print(f'Number of vertical tracks available: {number_of_vertical_tracks_available}')
     number_of_horizontal_tracks_available = math.floor((w - 2*x_offset) / min_tb_pitch)
     print(f'Number of horizontal tracks available: {number_of_horizontal_tracks_available}')
     print(f'Height is {h}, width is {w}')
-    number_of_left_pins = math.ceil(((num_wport + num_rwport) * (2 if mem.has_wmask else 1)  * bits) / 4) + math.ceil((num_rport + num_wport) * addr_width / 2)
+
+    number_of_left_pins = math.ceil(((num_wport + num_rwport) * (2 if mem.has_wmask else 1)  * bits) / 4) + math.ceil((num_rport + num_wport + num_rwport) * addr_width / 2)
     number_of_spare_left_tracks = number_of_vertical_tracks_available - number_of_left_pins
     print(f'Number of spare left tracks: {number_of_spare_left_tracks}')
     left_track_count = count_tracks(number_of_spare_left_tracks, number_of_vertical_tracks_available, number_of_left_pins)
@@ -76,7 +76,7 @@ def generate_lef( mem ):
     left_group_pitch = math.floor((number_of_vertical_tracks_available - number_of_left_pins*left_track_count) / 2)*mem.process.LRpitch_um 
     print(f"Left track_count complete. pitch is {left_group_pitch}")
 
-    number_of_right_pins =  + math.ceil(((num_wport + num_rwport) * (2 if mem.has_wmask else 1) * bits) / 4)  + math.ceil((num_rport + num_wport) * addr_width / 2)
+    number_of_right_pins =  math.ceil(((num_wport + num_rwport) * (2 if mem.has_wmask else 1) * bits) / 4)  + math.ceil((num_rport + num_wport + num_rwport) * addr_width / 2)
     number_of_spare_right_tracks = number_of_vertical_tracks_available - number_of_right_pins
     print(f'Number of spare right tracks: {number_of_spare_right_tracks}')
     right_track_count = count_tracks(number_of_spare_right_tracks, number_of_vertical_tracks_available, number_of_right_pins)
@@ -125,21 +125,22 @@ def generate_lef( mem ):
     x_top_step    = x_offset
     x_bottom_step = x_offset
     if (mem.has_wmask):
+        wmask_bits = math.ceil(bits / mem.write_granularity)
         for ct in range(num_rwport) :
-            for i in range(math.ceil(bits/4)):
-                y_left_step  = lef_add_pin( fid, mem, f'rw{ct}_mask_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
-            for i in range(math.ceil(bits/4), math.ceil(bits/2)):
-                y_right_step = lef_add_pin( fid, mem, f'rw{ct}_mask_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
-            for i in range(math.ceil(bits/2), bits):
-                x_top_step   = lef_add_pin( fid, mem, f'rw{ct}_mask_in[{i}]', True, 'T', x_top_step, top_pin_pitch )
+            for i in range(math.ceil(wmask_bits/4)):
+                y_left_step  = lef_add_pin( fid, mem, f'rw{ct}_wmask_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
+            for i in range(math.ceil(wmask_bits/4), math.ceil(wmask_bits/2)):
+                y_right_step = lef_add_pin( fid, mem, f'rw{ct}_wmask_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
+            for i in range(math.ceil(wmask_bits/2), wmask_bits):
+                x_top_step   = lef_add_pin( fid, mem, f'rw{ct}_wmask_in[{i}]', True, 'T', x_top_step, top_pin_pitch )
             
         for ct in range(num_wport) :
-            for i in range(math.ceil(bits/4)):
-                y_left_step  = lef_add_pin( fid, mem, f'w{ct}_mask_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
-            for i in range(math.ceil(bits/4), math.ceil(bits/2)):
-                y_right_step = lef_add_pin( fid, mem, f'w{ct}_mask_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
-            for i in range(math.ceil(bits/2), bits):
-                x_top_step   = lef_add_pin( fid, mem, f'w{ct}_mask_in[{i}]', True, 'T', x_top_step, top_pin_pitch )
+            for i in range(math.ceil(wmask_bits/4)):
+                y_left_step  = lef_add_pin( fid, mem, f'w{ct}_wmask_in[{i}]', True, 'L', y_left_step, left_pin_pitch )
+            for i in range(math.ceil(wmask_bits/4), math.ceil(wmask_bits/2)):
+                y_right_step = lef_add_pin( fid, mem, f'w{ct}_wmask_in[{i}]', True, 'R', y_right_step, right_pin_pitch )
+            for i in range(math.ceil(wmask_bits/2), bits):
+                x_top_step   = lef_add_pin( fid, mem, f'w{ct}_wmask_in[{i}]', True, 'T', x_top_step, top_pin_pitch )
            
     
     for ct in range(num_rwport) :
@@ -192,12 +193,12 @@ def generate_lef( mem ):
         
     # Clock and control pins
     for ct in range(num_rwport) :
-        x_top_step = lef_add_pin( fid, mem, f'rw{ct}_we_in', True, 'T', x_top_step, top_pin_pitch )
+        x_top_step = lef_add_pin( fid, mem, f'rw{ct}_we_in', True, 'T', x_top_step, top_pin_pitch)
         x_top_step = lef_add_pin( fid, mem, f'rw{ct}_ce_in', True, 'T', x_top_step, top_pin_pitch)
         x_top_step = lef_add_pin( fid, mem, f'rw{ct}_clk', True, 'T', x_top_step, top_pin_pitch)
     for ct in range(num_wport) :
-        x_top_step = lef_add_pin( fid, mem, f'w{ct}_we_in', True, 'T', x_top_step, top_pin_pitch )
-        x_top_step = lef_add_pin( fid, mem, f'w{ct}_ce_in', True, 'T', x_top_step, top_pin_pitch )
+        x_top_step = lef_add_pin( fid, mem, f'w{ct}_we_in', True, 'T', x_top_step, top_pin_pitch)
+        x_top_step = lef_add_pin( fid, mem, f'w{ct}_ce_in', True, 'T', x_top_step, top_pin_pitch)
         x_top_step = lef_add_pin( fid, mem, f'w{ct}_clk', True, 'T', x_top_step, top_pin_pitch)
     for ct in range(num_rport):
         x_top_step = lef_add_pin( fid, mem, f'r{ct}_ce_in', True, 'T', x_top_step, top_pin_pitch )  
@@ -207,8 +208,6 @@ def generate_lef( mem ):
     ########################################
     # Create VDD/VSS Straps
     ########################################
-
-   
 
     # --- configure per-layer geometry ---
     # widths are HALF widths (µm)
