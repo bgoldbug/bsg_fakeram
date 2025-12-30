@@ -14,20 +14,15 @@ def get_macro_dimensions(process, sram_data):
   # Corresponds to the recommended 122 cell in asap7
   bitcell_height = 10 * fin_pitch_um
   bitcell_width = 2 * contacted_poly_pitch_um
-
-  all_bitcell_height =  bitcell_height * depth
-  all_bitcell_width =  bitcell_width * width_in_bits
-
-  if num_banks == 2 or num_banks == 4:
-    all_bitcell_height = all_bitcell_height / num_banks
-    all_bitcell_width = all_bitcell_width * num_banks
-  elif num_banks != 1:
-    raise Exception("Unsupported number of banks: {}".format(num_banks))
+  
+  all_bitcell_height =  bitcell_height * (width_in_bits / 2 + depth)
+  all_bitcell_width =  bitcell_width * (width_in_bits / 2) 
+  
 
   all_bitcell_height = all_bitcell_height / column_mux_factor
   all_bitcell_width = all_bitcell_width * column_mux_factor
 
-  total_height = (all_bitcell_height * 1.2 * (2 if not sram_data['no_wmask'] else 1))
+  total_height = all_bitcell_height * 1.2
   total_width = all_bitcell_width * 1.2
 
   # Dimensions need to be at least 6.221 otherwise PDN will cause error
