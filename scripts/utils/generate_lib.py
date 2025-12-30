@@ -801,7 +801,7 @@ def generate_lib( mem ):
 
     if (mem.has_wmask):
       for i in range(int(num_rwport)) :
-        LIB_file.write('    bus(rw%s_mask_in)   {\n' % (i))
+        LIB_file.write('    bus(rw%s_wmask_in)   {\n' % (i))
         LIB_file.write('        bus_type : %s_DATA;\n' % name)
         LIB_file.write('        memory_write() {\n')
         LIB_file.write('            address : rw%s_addr_in;\n' % (i))
