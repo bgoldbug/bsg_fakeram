@@ -32,8 +32,8 @@ class Process:
     if ('pinHeight_nm' in json_data):
       self.LRheight_um    = self.TBheight_um  = int(json_data['pinPitch_nm']) / 1000.0 if 'pinHeight_nm' not in json_data else int(json_data['pinHeight_nm']) / 1000.0
     else:
-      self.TBheight_um   = self.TBwidth_um if 'TBpinHeight_nm' not in json_data else int(json_data['TBpinHeight_nm']) / 1000.0
-      self.LRheight_um   = self.LRwidth_um if 'LRpinHeight_nm' not in json_data else int(json_data['LRpinHeight_nm']) / 1000.0
+      self.TBheight_um   = self.TBwidth_um * 3 if 'TBpinHeight_nm' not in json_data else int(json_data['TBpinHeight_nm']) / 1000.0
+      self.LRheight_um   = self.LRwidth_um * 3 if 'LRpinHeight_nm' not in json_data else int(json_data['LRpinHeight_nm']) / 1000.0
     
 
     if (self.tech_nm == 7):
