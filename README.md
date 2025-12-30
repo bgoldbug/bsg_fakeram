@@ -1,6 +1,9 @@
 # Dynamic Black-box SRAM Generator (based off of [BSG_FakeRAM](https://github.com/bespoke-silicon-group/bsg_fakeram))
 
-The intent of this project is to improve some features for the FakeRAM generator created by the folks over at [Bespoke Silicon Group](https://www.bsg.ai/). It also uses some of the ASAP7 timing constraints and parameters from ABKGroup's [FakeRAM2.0](https://github.com/ABKGroup/FakeRAM2.0). The purpose of the project is to add configurability for varying FakeRAM configs, since both generators are limited to only `rw` SRAM configs. Our generator allows for varying configs (i.e. `1r1w`, `2r1w`, `1rw1r`, etc.). 
+The intent of this project is to improve some features for the FakeRAM generator created by the folks over at [Bespoke Silicon Group](https://www.bsg.ai/). 
+It also uses some of the ASAP7 timing constraints and parameters from ABKGroup's [FakeRAM2.0](https://github.com/ABKGroup/FakeRAM2.0). 
+The purpose of the project is to add configurability for varying FakeRAM configs, since both generators are limited to only `rw` SRAM configs. 
+Our generator allows for varying configs (i.e. `1r1w`, `2r1w`, `1rw1r`, etc.). 
 
 ## Setup
 
@@ -108,6 +111,7 @@ the supply straps (on metal 4) will be vertical. By default, `flipPins = false`.
 - `width` - the number of bits per word 
 - `depth` - the number of words in the SRAm
 - `banks` - the number of banks the SRAM should be split into
+  -
 - `no_wmask` ***(Optional)*** - `true` if the SRAM doesn't use any mask bits, `false` otherwise. Set to `true` by default. 
 - `ports` - the number of `r`, `w` and `rw` ports that the SRAM macro contains (allows for the creation of various SRAM configs in a single `.cfg` file).
 
@@ -146,8 +150,15 @@ Below is an example of the naming for the pins in a `2r1w` FakeRAM config:
 - `r0_clk` - clock signal for our **first** read port
 - `r1_clk` - clock signal for our **second** read port
 
-For a config using a `rw` port, the pin names would be prefixed with `rw` rather than `r` or `w`. Keep the naming convention in mind when interfacing your FakeRAM macro with a larger design.
+For a config using a `rw` port, the pin names would be prefixed with `rw` rather than `r` or `w`. Keep the naming convention in 
+mind when interfacing your FakeRAM macro with a larger design.
 
+## Memory Banking 
+
+By default, if a user specifies more than one memory bank ***(which must be an even value)*** it will splice based on `width`. There is an optional 
+config variable `banking_convention`, which can be used to specify banking based on `depth`:
+- `"banking_convention" : width` ***(DEFAULT)*** - memory banks will be created by splicing based on width
+- `"banking_convention" : depth` - memory banks will be created by splicing based on depth
 
 
 
