@@ -111,7 +111,6 @@ the supply straps (on metal 4) will be vertical. By default, `flipPins = false`.
 - `width` - the number of bits per word 
 - `depth` - the number of words in the SRAm
 - `banks` - the number of banks the SRAM should be split into
-  -
 - `no_wmask` ***(Optional)*** - `true` if the SRAM doesn't use any mask bits, `false` otherwise. Set to `true` by default. 
 - `ports` - the number of `r`, `w` and `rw` ports that the SRAM macro contains (allows for the creation of various SRAM configs in a single `.cfg` file).
 
@@ -157,8 +156,9 @@ mind when interfacing your FakeRAM macro with a larger design.
 
 By default, if a user specifies more than one memory bank ***(which must be an even value)*** it will splice based on `width`. There is an optional 
 config variable `banking_convention`, which can be used to specify banking based on `depth`:
-- `"banking_convention" : width` ***(DEFAULT)*** - memory banks will be created by splicing based on width
-- `"banking_convention" : depth` - memory banks will be created by splicing based on depth
+- `"banking_convention" : "width"` ***(DEFAULT)*** - memory banks will be created by splicing based on width
+- `"banking_convention" : "depth"` - memory banks will be created by splicing based on depth
+
 
 
 
